@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/src/context/AuthContext';
 import { apiCall, wsUrl } from '@/src/api/client';
 import { theme, statusColor } from '@/src/theme';
+import { fmtISTFriendly } from '@/src/utils/datetime';
 
 interface Order {
   id: string; employee_id: string; employee_name: string;
@@ -82,7 +83,7 @@ export default function EmployeeOrders() {
               <View style={styles.cardHeader}>
                 <View>
                   <Text style={styles.orderId}>#{o.id.slice(0, 8).toUpperCase()}</Text>
-                  <Text style={styles.orderTime}>{new Date(o.created_at).toLocaleString()}</Text>
+                  <Text style={styles.orderTime}>{fmtISTFriendly(o.created_at)}</Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor(o.status) }]}>
                   <Text style={styles.statusText}>{o.status.toUpperCase()}</Text>

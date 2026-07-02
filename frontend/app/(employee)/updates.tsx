@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/src/context/AuthContext';
 import { apiCall, wsUrl } from '@/src/api/client';
 import { theme } from '@/src/theme';
+import { fmtISTFriendly } from '@/src/utils/datetime';
 
 interface UpdateItem { id: string; title: string; body: string; priority: string; pinned: boolean; created_at: string; }
 
@@ -59,7 +60,7 @@ export default function EmployeeUpdates() {
               )}
             </View>
             <Text style={styles.body}>{u.body}</Text>
-            <Text style={styles.time}>{new Date(u.created_at).toLocaleString()}</Text>
+            <Text style={styles.time}>{fmtISTFriendly(u.created_at)}</Text>
           </View>
         ))}
       </ScrollView>

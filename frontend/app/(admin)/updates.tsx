@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/src/context/AuthContext';
 import { apiCall } from '@/src/api/client';
 import { theme } from '@/src/theme';
+import { fmtISTFriendly } from '@/src/utils/datetime';
 
 interface UpdateItem { id: string; title: string; body: string; priority: string; pinned: boolean; created_at: string; }
 
@@ -69,7 +70,7 @@ export default function AdminUpdates() {
               {u.priority === 'high' && <View style={styles.priTag}><Text style={styles.priText}>HIGH</Text></View>}
             </View>
             <Text style={styles.body}>{u.body}</Text>
-            <Text style={styles.time}>{new Date(u.created_at).toLocaleString()}</Text>
+            <Text style={styles.time}>{fmtISTFriendly(u.created_at)}</Text>
             <View style={styles.actions}>
               <Pressable style={styles.iconBtn} onPress={() => togglePin(u)} testID={`pin-${u.id}`}>
                 <Ionicons name={u.pinned ? 'pin' : 'pin-outline'} size={16} color={theme.color.brand} />

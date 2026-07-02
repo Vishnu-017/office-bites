@@ -366,8 +366,6 @@ async def create_order(payload: OrderCreate, user: dict = Depends(get_current_us
             raise HTTPException(status_code=400, detail=f"{menu_item['name']} is unavailable")
         if it.quantity <= 0:
             raise HTTPException(status_code=400, detail="Invalid quantity")
-        if menu_item.get("stock", 0) < it.quantity:
-            raise HTTPException(status_code=400, detail=f"Not enough stock for {menu_item['name']}")
         line = {
             "item_id": menu_item["id"],
             "name": menu_item["name"],
@@ -377,9 +375,7 @@ async def create_order(payload: OrderCreate, user: dict = Depends(get_current_us
         total += line["price"] * line["quantity"]
         validated_items.append(line)
 
-    # Decrement stock
-    for line in validated_items:
-        await db.menu_items.update_one({"id": line["item_id"]}, {"$inc": {"stock": -line["quantity"]}})
+    # Unlimited stock — no decrement
 
     order = {
         "id": str(uuid.uuid4()),
@@ -875,6 +871,8 @@ async def vote_poll(poll_id: str, payload: PollVote, user: dict = Depends(get_cu
         {"$set": {"response": payload.response, "voted_at": now_iso(), "employee_name": user["name"]}},
         upsert=True,
     )
+    # Broadcast to admins so dashboards refresh live
+    await ws_manager.broadcast_to_role("admin", {"type": "poll_vote", "poll_id": poll_id})
     return {"success": True, "response": payload.response}
 
 

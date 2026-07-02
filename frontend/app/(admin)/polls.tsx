@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Modal, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Modal, Switch, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/src/context/AuthContext';
-import { apiCall } from '@/src/api/client';
+import { apiCall, wsUrl } from '@/src/api/client';
 import { theme } from '@/src/theme';
+import { fmtISTFriendly } from '@/src/utils/datetime';
 
 interface Poll { id: string; kind: string; title: string; description: string; date: string; closes_at: string; active: boolean; yes_count?: number; no_count?: number; }
 interface Response { employee_id: string; employee_name: string; response: string; voted_at: string; }
@@ -12,40 +13,86 @@ interface Response { employee_id: string; employee_name: string; response: strin
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const defaultClose = () => { const d = new Date(); d.setHours(11, 0, 0, 0); return d.toISOString(); };
 
+// Build ISO from IST parts (date YYYY-MM-DD, hour 1-12, min 0-59, ampm)
+function buildISTIso(date: string, hour12: number, minute: number, ampm: 'AM' | 'PM'): string {
+  let h = hour12 % 12;
+  if (ampm === 'PM') h += 12;
+  // interpret as IST (UTC+5:30), so subtract 5:30 to get UTC
+  const [y, m, d] = date.split('-').map(Number);
+  const local = new Date(Date.UTC(y, (m || 1) - 1, d || 1, h, minute));
+  const utcMs = local.getTime() - (5 * 60 + 30) * 60 * 1000;
+  return new Date(utcMs).toISOString();
+}
+function extractIST(iso: string): { date: string; hour: number; minute: number; ampm: 'AM' | 'PM' } {
+  try {
+    const d = new Date(iso);
+    // Get IST parts via toLocaleString
+    const parts = d.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '');
+    // format: "DD/MM/YYYY HH:MM"
+    const [dp, tp] = parts.split(' ');
+    const [dd, mm, yy] = dp.split('/');
+    const [hh, mi] = tp.split(':').map(Number);
+    const ampm: 'AM' | 'PM' = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh === 0 ? 12 : hh > 12 ? hh - 12 : hh;
+    return { date: `${yy}-${mm}-${dd}`, hour: h12, minute: mi, ampm };
+  } catch {
+    return { date: todayStr(), hour: 11, minute: 0, ampm: 'AM' };
+  }
+}
+
 export default function AdminPolls() {
   const { user } = useAuth();
   const [polls, setPolls] = useState<Poll[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [modal, setModal] = useState<'new' | Poll | null>(null);
   const [form, setForm] = useState({ kind: 'lunch', title: '', description: '', date: todayStr(), closes_at: defaultClose(), active: true });
+  const [timeParts, setTimeParts] = useState<{ hour: number; minute: number; ampm: 'AM' | 'PM' }>({ hour: 11, minute: 0, ampm: 'AM' });
   const [responsesModal, setResponsesModal] = useState<Poll | null>(null);
   const [responses, setResponses] = useState<{ yes: Response[]; no: Response[] }>({ yes: [], no: [] });
 
   const load = useCallback(async () => {
     if (!user) return;
     setPolls(await apiCall<Poll[]>('/api/polls', user.token));
-    setLoading(false);
+    setLoading(false); setRefreshing(false);
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
 
+  // Live refresh on any vote
+  useEffect(() => {
+    if (!user) return;
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(wsUrl(user.token));
+      ws.onmessage = (e) => { try { const m = JSON.parse(e.data); if (m.type === 'poll_vote') load(); } catch {} };
+    } catch {}
+    return () => { try { ws?.close(); } catch {} };
+  }, [user, load]);
+
+  useEffect(() => { const t = setInterval(load, 10000); return () => clearInterval(t); }, [load]);
+
   const openNew = (kind: string) => {
     setForm({ kind, title: '', description: '', date: todayStr(), closes_at: defaultClose(), active: true });
+    setTimeParts({ hour: 11, minute: 0, ampm: 'AM' });
     setModal('new');
   };
   const openEdit = (p: Poll) => {
-    setForm({ kind: p.kind, title: p.title, description: p.description, date: p.date, closes_at: p.closes_at, active: p.active });
+    const parts = extractIST(p.closes_at);
+    setForm({ kind: p.kind, title: p.title, description: p.description, date: parts.date, closes_at: p.closes_at, active: p.active });
+    setTimeParts({ hour: parts.hour, minute: parts.minute, ampm: parts.ampm });
     setModal(p);
   };
 
   const save = async () => {
     if (!user) return;
+    const closesIso = buildISTIso(form.date, timeParts.hour, timeParts.minute, timeParts.ampm);
     try {
       if (modal === 'new') {
-        await apiCall('/api/polls', user.token, { method: 'POST', body: JSON.stringify(form) });
+        await apiCall('/api/polls', user.token, { method: 'POST', body: JSON.stringify({ ...form, closes_at: closesIso }) });
       } else if (modal) {
-        const { kind: _k, ...upd } = form as any;
-        await apiCall(`/api/polls/${(modal as Poll).id}`, user.token, { method: 'PUT', body: JSON.stringify(upd) });
+        const { kind: _k, ...rest } = form as any;
+        await apiCall(`/api/polls/${(modal as Poll).id}`, user.token, { method: 'PUT', body: JSON.stringify({ ...rest, closes_at: closesIso }) });
       }
       setModal(null); load();
     } catch (e: any) { alert?.(e.message); }
@@ -77,7 +124,10 @@ export default function AdminPolls() {
           </Pressable>
         </View>
       </View>
-      <ScrollView contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: 40 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.color.brand} />}
+      >
         {loading ? <ActivityIndicator color={theme.color.brand} style={{ marginTop: 40 }} /> : polls.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="pie-chart-outline" size={56} color={theme.color.onSurfaceTertiary} />
@@ -94,7 +144,7 @@ export default function AdminPolls() {
             </View>
             <Text style={styles.pollTitle}>{p.title}</Text>
             {p.description ? <Text style={styles.pollDesc}>{p.description}</Text> : null}
-            <Text style={styles.meta}>Closes: {new Date(p.closes_at).toLocaleString()}</Text>
+            <Text style={styles.meta}>Closes: {fmtISTFriendly(p.closes_at)}</Text>
             <View style={styles.tallyRow}>
               <View style={styles.tallyCell}>
                 <Text style={styles.tallyNum}>{p.yes_count || 0}</Text>
@@ -133,8 +183,44 @@ export default function AdminPolls() {
             <Text style={styles.modalTitle}>{modal === 'new' ? `New ${form.kind} Poll` : 'Edit Poll'}</Text>
             <TextInput style={styles.input} placeholder="Title (e.g. Today's Lunch: Veg Biryani)" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.title} onChangeText={t => setForm({ ...form, title: t })} testID="poll-form-title" />
             <TextInput style={styles.input} placeholder="Description (e.g. Will you have lunch today?)" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.description} onChangeText={t => setForm({ ...form, description: t })} testID="poll-form-desc" />
-            <TextInput style={styles.input} placeholder="Date (YYYY-MM-DD)" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.date} onChangeText={t => setForm({ ...form, date: t })} />
-            <TextInput style={styles.input} placeholder="Closes at (ISO)" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.closes_at} onChangeText={t => setForm({ ...form, closes_at: t })} />
+            <Text style={styles.rowLabel}>Poll date (YYYY-MM-DD)</Text>
+            <TextInput style={styles.input} placeholder="2026-02-15" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.date} onChangeText={t => setForm({ ...form, date: t })} />
+            <Text style={styles.rowLabel}>Closes at (IST)</Text>
+            <View style={styles.timeRow}>
+              <TextInput
+                style={styles.timeInput}
+                placeholder="hh"
+                placeholderTextColor={theme.color.onSurfaceTertiary}
+                keyboardType="numeric"
+                maxLength={2}
+                value={String(timeParts.hour)}
+                onChangeText={t => { const n = parseInt(t) || 0; setTimeParts({ ...timeParts, hour: Math.max(1, Math.min(12, n)) }); }}
+                testID="poll-time-hour"
+              />
+              <Text style={styles.timeColon}>:</Text>
+              <TextInput
+                style={styles.timeInput}
+                placeholder="mm"
+                placeholderTextColor={theme.color.onSurfaceTertiary}
+                keyboardType="numeric"
+                maxLength={2}
+                value={String(timeParts.minute).padStart(2, '0')}
+                onChangeText={t => { const n = parseInt(t) || 0; setTimeParts({ ...timeParts, minute: Math.max(0, Math.min(59, n)) }); }}
+                testID="poll-time-min"
+              />
+              <View style={styles.ampmGroup}>
+                {(['AM', 'PM'] as const).map(ap => (
+                  <Pressable
+                    key={ap}
+                    testID={`poll-time-${ap.toLowerCase()}`}
+                    style={[styles.ampmBtn, timeParts.ampm === ap && { backgroundColor: theme.color.brand }]}
+                    onPress={() => setTimeParts({ ...timeParts, ampm: ap })}
+                  >
+                    <Text style={[styles.ampmText, timeParts.ampm === ap && { color: '#fff' }]}>{ap}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
             <View style={styles.row}>
               <Text style={styles.rowLabel}>Active</Text>
               <Switch value={form.active} onValueChange={v => setForm({ ...form, active: v })} trackColor={{ true: theme.color.brand, false: theme.color.surfaceTertiary }} />
@@ -201,6 +287,12 @@ const styles = StyleSheet.create({
   rowLabel: { color: theme.color.onSurface, fontWeight: '600' },
   modalActions: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.md },
   modalBtn: { flex: 1, padding: theme.spacing.md, borderRadius: theme.radius.md, alignItems: 'center' },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+  timeInput: { backgroundColor: theme.color.surfaceSecondary, padding: theme.spacing.md, borderRadius: theme.radius.md, color: theme.color.onSurface, width: 60, textAlign: 'center', fontSize: theme.font.lg, fontWeight: '700' },
+  timeColon: { fontSize: theme.font.xl, fontWeight: '700', color: theme.color.onSurface },
+  ampmGroup: { flexDirection: 'row', marginLeft: theme.spacing.sm, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.pill, padding: 3 },
+  ampmBtn: { paddingHorizontal: theme.spacing.md, paddingVertical: 8, borderRadius: theme.radius.pill },
+  ampmText: { fontWeight: '700', color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm },
   sectionHeader: { fontSize: theme.font.lg, fontWeight: '700', color: theme.color.onSurface, marginTop: theme.spacing.md, marginBottom: theme.spacing.sm },
   respRow: { paddingVertical: 6, color: theme.color.onSurfaceSecondary, fontSize: theme.font.base },
 });

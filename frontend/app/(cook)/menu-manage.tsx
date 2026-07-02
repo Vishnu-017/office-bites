@@ -40,8 +40,8 @@ export default function CookMenuManage() {
     if (!user) return;
     const payload = {
       name: form.name, description: form.description,
-      price: parseFloat(form.price) || 0, image_url: form.image_url,
-      category: form.category, stock: parseInt(form.stock) || 0,
+      price: 0, image_url: form.image_url,
+      category: form.category, stock: 9999,
     };
     if (modal === 'new') {
       await apiCall('/api/menu', user.token, { method: 'POST', body: JSON.stringify({ ...payload, available: true }) });
@@ -73,7 +73,7 @@ export default function CookMenuManage() {
           <View key={item.id} style={styles.card} testID={`menu-manage-${item.id}`}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.meta}>{item.category} · Stock: {item.stock}</Text>
+              <Text style={styles.meta}>{item.category}</Text>
             </View>
             <Pressable
               style={[styles.availBtn, { backgroundColor: item.available ? theme.color.success : '#3F3F46' }]}
@@ -97,7 +97,6 @@ export default function CookMenuManage() {
             <TextInput style={styles.input} placeholder="Description" placeholderTextColor="#71717A" value={form.description} onChangeText={t => setForm({ ...form, description: t })} testID="form-desc" />
             <TextInput style={styles.input} placeholder="Image URL" placeholderTextColor="#71717A" value={form.image_url} onChangeText={t => setForm({ ...form, image_url: t })} testID="form-image" />
             <TextInput style={styles.input} placeholder="Category" placeholderTextColor="#71717A" value={form.category} onChangeText={t => setForm({ ...form, category: t })} testID="form-category" />
-            <TextInput style={styles.input} placeholder="Stock" placeholderTextColor="#71717A" value={form.stock} onChangeText={t => setForm({ ...form, stock: t })} keyboardType="numeric" testID="form-stock" />
             <View style={styles.modalActions}>
               <Pressable style={[styles.modalBtn, { backgroundColor: '#3F3F46' }]} onPress={() => setModal(null)}><Text style={styles.modalBtnText}>Cancel</Text></Pressable>
               <Pressable style={[styles.modalBtn, { backgroundColor: theme.color.brandSecondary }]} onPress={save} testID="form-save"><Text style={styles.modalBtnText}>Save</Text></Pressable>

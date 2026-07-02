@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/src/context/AuthContext';
 import { apiCall, wsUrl } from '@/src/api/client';
 import { theme } from '@/src/theme';
+import { fmtISTFriendly } from '@/src/utils/datetime';
 
 interface Poll { id: string; kind: string; title: string; description: string; date: string; closes_at: string; active: boolean; }
 interface Item { poll: Poll; my_vote: string | null; yes_count: number; no_count: number; }
@@ -72,7 +73,7 @@ export default function EmployeePolls() {
         </View>
         <Text style={styles.pollTitle}>{item.poll.title}</Text>
         {item.poll.description ? <Text style={styles.pollDesc}>{item.poll.description}</Text> : null}
-        <Text style={styles.closesAt}>Closes: {new Date(item.poll.closes_at).toLocaleString()}</Text>
+        <Text style={styles.closesAt}>Closes: {fmtISTFriendly(item.poll.closes_at)}</Text>
 
         <View style={styles.voteRow}>
           <Pressable

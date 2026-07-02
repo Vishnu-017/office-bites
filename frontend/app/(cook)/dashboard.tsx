@@ -128,7 +128,10 @@ export default function CookDashboard() {
               return (
                 <View key={o.id} style={styles.ticket} testID={`kds-ticket-${o.id}`}>
                   <View style={styles.ticketHeader}>
-                    <Text style={styles.ticketNo}>#{o.id.slice(0, 6).toUpperCase()}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ticketName} numberOfLines={1}>{o.employee_name}</Text>
+                      <Text style={styles.ticketId}>{o.employee_id} · #{o.id.slice(0, 6).toUpperCase()}</Text>
+                    </View>
                     <Text style={styles.ticketTimer}>{timeAgo(o.created_at)}</Text>
                   </View>
                   <View style={styles.tagRow}>
@@ -136,7 +139,6 @@ export default function CookDashboard() {
                       <Text style={styles.tagText}>{o.status.toUpperCase()}</Text>
                     </View>
                   </View>
-                  <Text style={styles.customer}>{o.employee_name} · {o.employee_id}</Text>
                   <View style={styles.divider} />
                   {o.items.map((it, i) => (
                     <View key={i} style={styles.itemRow}>
@@ -195,8 +197,9 @@ const styles = StyleSheet.create({
   chipTextActive: { color: '#fff' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.md },
   ticket: { width: '100%', backgroundColor: theme.color.kdsCard, borderRadius: theme.radius.md, padding: theme.spacing.lg, borderLeftWidth: 4, borderLeftColor: theme.color.brandSecondary },
-  ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  ticketNo: { fontSize: 22, fontWeight: '700', color: theme.color.kdsText, fontFamily: 'monospace' },
+  ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: theme.spacing.sm },
+  ticketName: { fontSize: 20, fontWeight: '700', color: theme.color.kdsText },
+  ticketId: { fontSize: theme.font.sm, color: theme.color.kdsTextMuted, marginTop: 2, fontFamily: 'monospace' },
   ticketTimer: { fontSize: theme.font.lg, color: theme.color.brandSecondary, fontFamily: 'monospace', fontWeight: '700' },
   tagRow: { flexDirection: 'row', marginTop: theme.spacing.sm },
   tag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.sm },
