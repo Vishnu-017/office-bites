@@ -111,7 +111,6 @@ export default function Cart() {
               <View key={l.item.id} style={styles.line} testID={`cart-line-${l.item.id}`}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.lineName}>{l.item.name}</Text>
-                  <Text style={styles.linePrice}>₹{l.item.price.toFixed(0)} each</Text>
                 </View>
                 <View style={styles.qtyRow}>
                   <Pressable style={styles.qtyBtn} onPress={() => updateQty(l.item.id, -1)} testID={`cart-dec-${l.item.id}`}>
@@ -122,7 +121,6 @@ export default function Cart() {
                     <Ionicons name="add" size={16} color={theme.color.brand} />
                   </Pressable>
                 </View>
-                <Text style={styles.lineTotal}>₹{(l.item.price * l.qty).toFixed(0)}</Text>
               </View>
             ))}
             <TextInput
@@ -141,9 +139,9 @@ export default function Cart() {
 
       {lines.length > 0 && (
         <View style={styles.checkoutBar}>
-          <View>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalAmount}>₹{total.toFixed(0)}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.totalLabel}>Total items</Text>
+            <Text style={styles.totalAmount}>{lines.reduce((s, l) => s + l.qty, 0)}</Text>
           </View>
           <Pressable style={[styles.submitBtn, submitting && { opacity: 0.6 }]} onPress={submit} disabled={submitting} testID="place-order-btn">
             {submitting ? <ActivityIndicator color={theme.color.onBrandPrimary} /> : <Text style={styles.submitText}>Place Order</Text>}

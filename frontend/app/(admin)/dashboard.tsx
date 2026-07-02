@@ -1,21 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/src/context/AuthContext';
+import { apiCall } from '@/src/api/client';
 import { theme } from '@/src/theme';
 
 interface Summary {
-  orders_today: number; orders_week: number; revenue_today: number; total_users: number;
-  weekly_trend: { date: string; orders: number; revenue: number }[];
-  top_items: { name: string; quantity: number; revenue: number }[];
+  orders_today: number; orders_week: number; total_users: number;
+  weekly_trend: { date: string; orders: number }[];
+  top_items: { name: string; quantity: number }[];
 }
+
+interface PollTrend { date: string; lunch_yes: number; lunch_no: number; snacks_yes: number; snacks_no: number; }
 
 const API = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const router = useRouter();
   const [data, setData] = useState<Summary | null>(null);
+  const [polls, setPolls] = useState<PollTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [msg, setMsg] = useState('');
@@ -23,9 +29,12 @@ export default function AdminDashboard() {
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch(`${API}/api/analytics/summary`, { headers: { Authorization: `Bearer ${user.token}` } });
-      const d = await res.json();
-      setData(d);
+      const [s, p] = await Promise.all([
+        apiCall<Summary>('/api/analytics/summary', user.token),
+        apiCall<{ trend: PollTrend[] }>('/api/analytics/polls', user.token),
+      ]);
+      setData(s);
+      setPolls(p.trend);
     } finally { setLoading(false); setRefreshing(false); }
   }, [user]);
 
@@ -40,21 +49,19 @@ export default function AdminDashboard() {
         const blob = new Blob([text], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
-        a.click();
+        a.href = url; a.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
         URL.revokeObjectURL(url);
         setMsg('CSV downloaded');
       } else {
         setMsg(`Report ready (${text.split('\n').length - 1} rows)`);
       }
       setTimeout(() => setMsg(''), 2500);
-    } catch (e: any) {
-      setMsg('Export failed');
-    }
+    } catch { setMsg('Export failed'); }
   };
 
   const maxOrders = data?.weekly_trend.reduce((m, d) => Math.max(m, d.orders), 1) || 1;
+
+  const todayPoll = polls[0] || { lunch_yes: 0, lunch_no: 0, snacks_yes: 0, snacks_no: 0, date: '' };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -64,7 +71,7 @@ export default function AdminDashboard() {
       >
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>Analytics</Text>
+            <Text style={styles.title}>Reports & Analytics</Text>
             <Text style={styles.subtitle}>Today's overview</Text>
           </View>
           <Pressable style={styles.exportBtn} onPress={exportCsv} testID="export-csv-btn">
@@ -83,20 +90,36 @@ export default function AdminDashboard() {
                 <Text style={styles.kpiValue}>{data.orders_today}</Text>
                 <Text style={styles.kpiLabel}>Orders Today</Text>
               </View>
-              <View style={styles.kpi} testID="kpi-revenue">
-                <Ionicons name="cash" size={20} color={theme.color.success} />
-                <Text style={styles.kpiValue}>₹{data.revenue_today.toFixed(0)}</Text>
-                <Text style={styles.kpiLabel}>Revenue Today</Text>
-              </View>
               <View style={styles.kpi} testID="kpi-week">
                 <Ionicons name="calendar" size={20} color={theme.color.brandSecondary} />
                 <Text style={styles.kpiValue}>{data.orders_week}</Text>
                 <Text style={styles.kpiLabel}>Orders (7d)</Text>
               </View>
-              <View style={styles.kpi} testID="kpi-users">
-                <Ionicons name="people" size={20} color={theme.color.info} />
-                <Text style={styles.kpiValue}>{data.total_users}</Text>
-                <Text style={styles.kpiLabel}>Users</Text>
+              <View style={styles.kpi} testID="kpi-lunch">
+                <Ionicons name="restaurant" size={20} color={theme.color.success} />
+                <Text style={styles.kpiValue}>{todayPoll.lunch_yes}</Text>
+                <Text style={styles.kpiLabel}>Lunch (Yes)</Text>
+              </View>
+              <View style={styles.kpi} testID="kpi-snacks">
+                <Ionicons name="cafe" size={20} color={theme.color.info} />
+                <Text style={styles.kpiValue}>{todayPoll.snacks_yes}</Text>
+                <Text style={styles.kpiLabel}>Snacks (Yes)</Text>
+              </View>
+            </View>
+
+            <View style={styles.chartCard}>
+              <Text style={styles.sectionTitle}>Today's Poll Response</Text>
+              <View style={styles.pollTallyRow}>
+                <View style={styles.pollCell}>
+                  <Text style={styles.pollKind}>LUNCH</Text>
+                  <Text style={styles.pollYes}>✅ {todayPoll.lunch_yes}</Text>
+                  <Text style={styles.pollNo}>❌ {todayPoll.lunch_no}</Text>
+                </View>
+                <View style={styles.pollCell}>
+                  <Text style={styles.pollKind}>SNACKS</Text>
+                  <Text style={styles.pollYes}>✅ {todayPoll.snacks_yes}</Text>
+                  <Text style={styles.pollNo}>❌ {todayPoll.snacks_no}</Text>
+                </View>
               </View>
             </View>
 
@@ -116,6 +139,17 @@ export default function AdminDashboard() {
             </View>
 
             <View style={styles.chartCard}>
+              <Text style={styles.sectionTitle}>Poll Participation Trend</Text>
+              {polls.length === 0 ? <Text style={styles.emptyText}>No poll responses yet</Text> : polls.map(p => (
+                <View key={p.date} style={styles.pollTrendRow}>
+                  <Text style={styles.pollDate}>{p.date}</Text>
+                  <Text style={styles.pollStat}>🍛 {p.lunch_yes}/{p.lunch_yes + p.lunch_no}</Text>
+                  <Text style={styles.pollStat}>☕ {p.snacks_yes}/{p.snacks_yes + p.snacks_no}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.chartCard}>
               <Text style={styles.sectionTitle}>Most Ordered Items</Text>
               {data.top_items.length === 0 ? (
                 <Text style={styles.emptyText}>No orders yet</Text>
@@ -123,10 +157,18 @@ export default function AdminDashboard() {
                 <View key={it.name} style={styles.topRow} testID={`top-item-${i}`}>
                   <Text style={styles.topRank}>#{i + 1}</Text>
                   <Text style={styles.topName}>{it.name}</Text>
-                  <Text style={styles.topQty}>{it.quantity} sold</Text>
-                  <Text style={styles.topRev}>₹{it.revenue.toFixed(0)}</Text>
+                  <Text style={styles.topQty}>{it.quantity} orders</Text>
                 </View>
               ))}
+            </View>
+
+            <View style={styles.chartCard}>
+              <Text style={styles.sectionTitle}>Manage</Text>
+              <Pressable style={styles.linkBtn} onPress={() => router.push('/(admin)/users')} testID="manage-users-btn">
+                <Ionicons name="people" size={20} color={theme.color.brand} />
+                <Text style={styles.linkText}>Employee & Cook Accounts</Text>
+                <Ionicons name="chevron-forward" size={20} color={theme.color.onSurfaceTertiary} />
+              </Pressable>
             </View>
           </>
         )}
@@ -159,5 +201,14 @@ const styles = StyleSheet.create({
   topRank: { fontWeight: '700', color: theme.color.brand, width: 32 },
   topName: { flex: 1, color: theme.color.onSurface, fontSize: theme.font.base, fontWeight: '600' },
   topQty: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm },
-  topRev: { color: theme.color.success, fontWeight: '700', minWidth: 60, textAlign: 'right' },
+  pollTallyRow: { flexDirection: 'row', gap: theme.spacing.sm },
+  pollCell: { flex: 1, backgroundColor: theme.color.surface, padding: theme.spacing.md, borderRadius: theme.radius.md, alignItems: 'center' },
+  pollKind: { fontSize: theme.font.sm, fontWeight: '700', color: theme.color.brand, letterSpacing: 1, marginBottom: theme.spacing.sm },
+  pollYes: { fontSize: theme.font.xl, fontWeight: '700', color: theme.color.success },
+  pollNo: { fontSize: theme.font.base, color: theme.color.error, marginTop: 4 },
+  pollTrendRow: { flexDirection: 'row', paddingVertical: theme.spacing.sm, borderBottomWidth: 1, borderBottomColor: theme.color.border, gap: theme.spacing.md, alignItems: 'center' },
+  pollDate: { flex: 1, fontSize: theme.font.sm, color: theme.color.onSurfaceSecondary, fontWeight: '600' },
+  pollStat: { fontSize: theme.font.sm, color: theme.color.onSurface, fontWeight: '600' },
+  linkBtn: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, padding: theme.spacing.md, backgroundColor: theme.color.surface, borderRadius: theme.radius.md },
+  linkText: { flex: 1, color: theme.color.onSurface, fontWeight: '600', fontSize: theme.font.base },
 });

@@ -58,7 +58,7 @@ export default function AdminMenu() {
           <View key={item.id} style={styles.card} testID={`admin-menu-${item.id}`}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.meta}>{item.category} · ₹{item.price} · Stock: {item.stock}</Text>
+              <Text style={styles.meta}>{item.category} · Stock: {item.stock}</Text>
             </View>
             <Pressable style={[styles.availBtn, { backgroundColor: item.available ? theme.color.success : theme.color.onSurfaceTertiary }]} onPress={() => toggleAvail(item)}>
               <Text style={styles.availText}>{item.available ? 'On' : 'Off'}</Text>
@@ -75,7 +75,6 @@ export default function AdminMenu() {
             <Text style={styles.modalTitle}>{modal === 'new' ? 'Add Menu Item' : 'Edit Menu Item'}</Text>
             <TextInput style={styles.input} placeholder="Name" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.name} onChangeText={t => setForm({ ...form, name: t })} />
             <TextInput style={styles.input} placeholder="Description" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.description} onChangeText={t => setForm({ ...form, description: t })} />
-            <TextInput style={styles.input} placeholder="Price" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.price} onChangeText={t => setForm({ ...form, price: t })} keyboardType="numeric" />
             <TextInput style={styles.input} placeholder="Image URL" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.image_url} onChangeText={t => setForm({ ...form, image_url: t })} />
             <TextInput style={styles.input} placeholder="Category" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.category} onChangeText={t => setForm({ ...form, category: t })} />
             <TextInput style={styles.input} placeholder="Stock" placeholderTextColor={theme.color.onSurfaceTertiary} value={form.stock} onChangeText={t => setForm({ ...form, stock: t })} keyboardType="numeric" />

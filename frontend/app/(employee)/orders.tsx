@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/src/context/AuthContext';
@@ -13,12 +13,14 @@ interface Order {
 }
 
 const STATUSES = ['pending', 'accepted', 'preparing', 'ready', 'completed'];
+const ACTIVE = new Set(['pending', 'accepted', 'preparing', 'ready']);
 
 export default function EmployeeOrders() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<'active' | 'history'>('active');
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -48,10 +50,20 @@ export default function EmployeeOrders() {
     return () => { try { ws?.close(); } catch {} };
   }, [user, load]);
 
+  const filtered = useMemo(() => orders.filter(o => tab === 'active' ? ACTIVE.has(o.status) : !ACTIVE.has(o.status)), [orders, tab]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>My Orders</Text>
+      </View>
+      <View style={styles.tabs}>
+        <Pressable testID="orders-tab-active" style={[styles.tab, tab === 'active' && styles.tabActive]} onPress={() => setTab('active')}>
+          <Text style={[styles.tabText, tab === 'active' && styles.tabTextActive]}>Active ({orders.filter(o => ACTIVE.has(o.status)).length})</Text>
+        </Pressable>
+        <Pressable testID="orders-tab-history" style={[styles.tab, tab === 'history' && styles.tabActive]} onPress={() => setTab('history')}>
+          <Text style={[styles.tabText, tab === 'history' && styles.tabTextActive]}>History ({orders.filter(o => !ACTIVE.has(o.status)).length})</Text>
+        </Pressable>
       </View>
       <ScrollView
         contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: 40 }}
@@ -59,13 +71,13 @@ export default function EmployeeOrders() {
       >
         {loading ? (
           <ActivityIndicator color={theme.color.brand} style={{ marginTop: 40 }} />
-        ) : orders.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="receipt-outline" size={64} color={theme.color.onSurfaceTertiary} />
-            <Text style={styles.emptyText}>No orders yet</Text>
+            <Text style={styles.emptyText}>{tab === 'active' ? 'No active orders' : 'No past orders'}</Text>
           </View>
         ) : (
-          orders.map(o => (
+          filtered.map(o => (
             <View key={o.id} style={styles.card} testID={`order-card-${o.id}`}>
               <View style={styles.cardHeader}>
                 <View>
@@ -101,13 +113,8 @@ export default function EmployeeOrders() {
               {o.items.map((it, i) => (
                 <View key={i} style={styles.itemRow}>
                   <Text style={styles.itemName}>{it.name} × {it.quantity}</Text>
-                  <Text style={styles.itemPrice}>₹{(it.price * it.quantity).toFixed(0)}</Text>
                 </View>
               ))}
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalAmount}>₹{o.total.toFixed(0)}</Text>
-              </View>
             </View>
           ))
         )}
@@ -118,8 +125,13 @@ export default function EmployeeOrders() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.color.surface },
-  header: { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.color.divider },
+  header: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md },
   title: { fontSize: theme.font.xl, fontWeight: '700', color: theme.color.onSurface },
+  tabs: { flexDirection: 'row', paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.md, gap: theme.spacing.sm, borderBottomWidth: 1, borderBottomColor: theme.color.divider },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: theme.radius.pill, backgroundColor: theme.color.surfaceSecondary },
+  tabActive: { backgroundColor: theme.color.brand },
+  tabText: { color: theme.color.onSurfaceSecondary, fontWeight: '600', fontSize: theme.font.sm },
+  tabTextActive: { color: theme.color.onBrandPrimary },
   empty: { alignItems: 'center', paddingVertical: 80, gap: theme.spacing.md },
   emptyText: { fontSize: theme.font.lg, color: theme.color.onSurfaceSecondary },
   card: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.spacing.lg, marginBottom: theme.spacing.md },
@@ -137,8 +149,4 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: theme.color.border, marginVertical: theme.spacing.md },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   itemName: { fontSize: theme.font.base, color: theme.color.onSurface },
-  itemPrice: { fontSize: theme.font.base, color: theme.color.onSurfaceSecondary },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: theme.spacing.md, borderTopWidth: 1, borderTopColor: theme.color.border, marginTop: theme.spacing.sm },
-  totalLabel: { fontSize: theme.font.base, fontWeight: '600', color: theme.color.onSurfaceSecondary },
-  totalAmount: { fontSize: theme.font.lg, fontWeight: '700', color: theme.color.brand },
 });

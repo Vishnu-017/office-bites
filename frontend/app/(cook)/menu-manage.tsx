@@ -73,7 +73,7 @@ export default function CookMenuManage() {
           <View key={item.id} style={styles.card} testID={`menu-manage-${item.id}`}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.meta}>{item.category} · ₹{item.price} · Stock: {item.stock}</Text>
+              <Text style={styles.meta}>{item.category} · Stock: {item.stock}</Text>
             </View>
             <Pressable
               style={[styles.availBtn, { backgroundColor: item.available ? theme.color.success : '#3F3F46' }]}
@@ -95,7 +95,6 @@ export default function CookMenuManage() {
             <Text style={styles.modalTitle}>{modal === 'new' ? 'Add Menu Item' : 'Edit Menu Item'}</Text>
             <TextInput style={styles.input} placeholder="Name" placeholderTextColor="#71717A" value={form.name} onChangeText={t => setForm({ ...form, name: t })} testID="form-name" />
             <TextInput style={styles.input} placeholder="Description" placeholderTextColor="#71717A" value={form.description} onChangeText={t => setForm({ ...form, description: t })} testID="form-desc" />
-            <TextInput style={styles.input} placeholder="Price" placeholderTextColor="#71717A" value={form.price} onChangeText={t => setForm({ ...form, price: t })} keyboardType="numeric" testID="form-price" />
             <TextInput style={styles.input} placeholder="Image URL" placeholderTextColor="#71717A" value={form.image_url} onChangeText={t => setForm({ ...form, image_url: t })} testID="form-image" />
             <TextInput style={styles.input} placeholder="Category" placeholderTextColor="#71717A" value={form.category} onChangeText={t => setForm({ ...form, category: t })} testID="form-category" />
             <TextInput style={styles.input} placeholder="Stock" placeholderTextColor="#71717A" value={form.stock} onChangeText={t => setForm({ ...form, stock: t })} keyboardType="numeric" testID="form-stock" />

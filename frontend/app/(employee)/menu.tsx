@@ -102,7 +102,6 @@ export default function EmployeeMenu() {
             <View style={styles.heroText}>
               <Text style={styles.heroBadge}>TODAY'S SPECIAL</Text>
               <Text style={styles.heroName}>{featured.name}</Text>
-              <Text style={styles.heroPrice}>₹{featured.price.toFixed(0)}</Text>
             </View>
           </View>
         )}
@@ -146,7 +145,6 @@ export default function EmployeeMenu() {
                     <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
                     <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>
                     <View style={styles.cardFooter}>
-                      <Text style={styles.cardPrice}>₹{item.price.toFixed(0)}</Text>
                       {qty === 0 ? (
                         <Pressable
                           testID={`add-btn-${item.id}`}

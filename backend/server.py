@@ -686,6 +686,223 @@ async def seed_data():
             await db.menu_items.insert_one(doc)
 
 
+# ============= UPDATES (Announcements) =============
+class UpdateItem(BaseModel):
+    id: str
+    title: str
+    body: str
+    priority: str = "normal"  # normal | high
+    pinned: bool = False
+    created_at: str
+
+
+class UpdateCreate(BaseModel):
+    title: str
+    body: str
+    priority: str = "normal"
+    pinned: bool = False
+
+
+class UpdatePatch(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    priority: Optional[str] = None
+    pinned: Optional[bool] = None
+
+
+@api_router.get("/updates", response_model=List[UpdateItem])
+async def list_updates(user: dict = Depends(get_current_user)):
+    docs = await db.updates.find({}, {"_id": 0}).sort([("pinned", -1), ("created_at", -1)]).to_list(500)
+    return docs
+
+
+@api_router.post("/updates", response_model=UpdateItem)
+async def create_update(payload: UpdateCreate, user: dict = Depends(require_roles("admin"))):
+    item = {"id": str(uuid.uuid4()), "created_at": now_iso(), **payload.model_dump()}
+    await db.updates.insert_one(item.copy())
+    # Notify all employees
+    employees = await db.employees.find({"role": "employee", "active": True}, {"_id": 0, "employee_id": 1}).to_list(1000)
+    for e in employees:
+        await push_notification(e["employee_id"], "New update", item["title"])
+    return clean(item)
+
+
+@api_router.put("/updates/{update_id}", response_model=UpdateItem)
+async def update_update(update_id: str, payload: UpdatePatch, user: dict = Depends(require_roles("admin"))):
+    upd = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not upd:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    res = await db.updates.update_one({"id": update_id}, {"$set": upd})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Update not found")
+    doc = await db.updates.find_one({"id": update_id}, {"_id": 0})
+    return doc
+
+
+@api_router.delete("/updates/{update_id}")
+async def delete_update(update_id: str, user: dict = Depends(require_roles("admin"))):
+    res = await db.updates.delete_one({"id": update_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Update not found")
+    return {"success": True}
+
+
+# ============= FOOD POLLS =============
+class Poll(BaseModel):
+    id: str
+    kind: str  # "lunch" | "snacks"
+    title: str
+    description: str
+    date: str  # YYYY-MM-DD
+    closes_at: str  # ISO
+    active: bool = True
+    created_at: str
+
+
+class PollCreate(BaseModel):
+    kind: str
+    title: str
+    description: str = ""
+    date: str
+    closes_at: str
+    active: bool = True
+
+
+class PollPatch(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[str] = None
+    closes_at: Optional[str] = None
+    active: Optional[bool] = None
+
+
+class PollVote(BaseModel):
+    response: str  # "yes" | "no"
+
+
+class PollWithVote(BaseModel):
+    poll: Poll
+    my_vote: Optional[str] = None
+    yes_count: int = 0
+    no_count: int = 0
+
+
+def today_str() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+@api_router.get("/polls/today")
+async def polls_today(user: dict = Depends(get_current_user)):
+    today = today_str()
+    polls = await db.polls.find({"date": today, "active": True}, {"_id": 0}).to_list(10)
+    result = []
+    for p in polls:
+        yes = await db.poll_votes.count_documents({"poll_id": p["id"], "response": "yes"})
+        no = await db.poll_votes.count_documents({"poll_id": p["id"], "response": "no"})
+        my = await db.poll_votes.find_one({"poll_id": p["id"], "employee_id": user["employee_id"]}, {"_id": 0})
+        result.append({"poll": p, "my_vote": my["response"] if my else None, "yes_count": yes, "no_count": no})
+    return result
+
+
+@api_router.get("/polls")
+async def list_polls(user: dict = Depends(require_roles("admin"))):
+    polls = await db.polls.find({}, {"_id": 0}).sort("date", -1).to_list(200)
+    for p in polls:
+        p["yes_count"] = await db.poll_votes.count_documents({"poll_id": p["id"], "response": "yes"})
+        p["no_count"] = await db.poll_votes.count_documents({"poll_id": p["id"], "response": "no"})
+    return polls
+
+
+@api_router.post("/polls", response_model=Poll)
+async def create_poll(payload: PollCreate, user: dict = Depends(require_roles("admin"))):
+    if payload.kind not in ("lunch", "snacks"):
+        raise HTTPException(status_code=400, detail="kind must be lunch or snacks")
+    # Upsert per (kind, date)
+    existing = await db.polls.find_one({"kind": payload.kind, "date": payload.date}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"A {payload.kind} poll already exists for {payload.date}. Edit it instead.")
+    poll = {"id": str(uuid.uuid4()), "created_at": now_iso(), **payload.model_dump()}
+    await db.polls.insert_one(poll.copy())
+    # Notify employees
+    employees = await db.employees.find({"role": "employee", "active": True}, {"_id": 0, "employee_id": 1}).to_list(1000)
+    for e in employees:
+        await push_notification(e["employee_id"], "New food poll", poll["title"])
+    return clean(poll)
+
+
+@api_router.put("/polls/{poll_id}", response_model=Poll)
+async def update_poll(poll_id: str, payload: PollPatch, user: dict = Depends(require_roles("admin"))):
+    upd = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not upd:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    res = await db.polls.update_one({"id": poll_id}, {"$set": upd})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Poll not found")
+    poll = await db.polls.find_one({"id": poll_id}, {"_id": 0})
+    # Notify employees of update
+    employees = await db.employees.find({"role": "employee", "active": True}, {"_id": 0, "employee_id": 1}).to_list(1000)
+    for e in employees:
+        await push_notification(e["employee_id"], "Poll updated", poll["title"])
+    return poll
+
+
+@api_router.delete("/polls/{poll_id}")
+async def delete_poll(poll_id: str, user: dict = Depends(require_roles("admin"))):
+    await db.polls.delete_one({"id": poll_id})
+    await db.poll_votes.delete_many({"poll_id": poll_id})
+    return {"success": True}
+
+
+@api_router.post("/polls/{poll_id}/vote")
+async def vote_poll(poll_id: str, payload: PollVote, user: dict = Depends(get_current_user)):
+    if payload.response not in ("yes", "no"):
+        raise HTTPException(status_code=400, detail="response must be yes or no")
+    poll = await db.polls.find_one({"id": poll_id}, {"_id": 0})
+    if not poll:
+        raise HTTPException(status_code=404, detail="Poll not found")
+    if not poll.get("active", True):
+        raise HTTPException(status_code=400, detail="Poll is closed")
+    try:
+        closes = datetime.fromisoformat(poll["closes_at"].replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) > closes:
+            raise HTTPException(status_code=400, detail="Poll has closed")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+    await db.poll_votes.update_one(
+        {"poll_id": poll_id, "employee_id": user["employee_id"]},
+        {"$set": {"response": payload.response, "voted_at": now_iso(), "employee_name": user["name"]}},
+        upsert=True,
+    )
+    return {"success": True, "response": payload.response}
+
+
+@api_router.get("/polls/{poll_id}/responses")
+async def poll_responses(poll_id: str, user: dict = Depends(require_roles("admin"))):
+    votes = await db.poll_votes.find({"poll_id": poll_id}, {"_id": 0}).sort("voted_at", -1).to_list(500)
+    yes = [v for v in votes if v["response"] == "yes"]
+    no = [v for v in votes if v["response"] == "no"]
+    return {"yes_count": len(yes), "no_count": len(no), "yes": yes, "no": no}
+
+
+@api_router.get("/analytics/polls")
+async def poll_analytics(user: dict = Depends(require_roles("admin"))):
+    pipeline = [
+        {"$lookup": {"from": "polls", "localField": "poll_id", "foreignField": "id", "as": "poll"}},
+        {"$unwind": "$poll"},
+        {"$group": {"_id": {"date": "$poll.date", "kind": "$poll.kind", "response": "$response"}, "count": {"$sum": 1}}},
+        {"$sort": {"_id.date": -1}},
+    ]
+    rows = await db.poll_votes.aggregate(pipeline).to_list(500)
+    trend: Dict[str, Dict] = {}
+    for r in rows:
+        d = r["_id"]["date"]; k = r["_id"]["kind"]; resp = r["_id"]["response"]
+        trend.setdefault(d, {"date": d, "lunch_yes": 0, "lunch_no": 0, "snacks_yes": 0, "snacks_no": 0})
+        trend[d][f"{k}_{resp}"] = r["count"]
+    return {"trend": sorted(trend.values(), key=lambda x: x["date"], reverse=True)[:14]}
+
+
 @app.on_event("startup")
 async def startup():
     await seed_data()
