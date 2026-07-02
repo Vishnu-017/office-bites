@@ -1,0 +1,168 @@
+{
+  "app_name": "OfficeBites",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A premium, functional, and appetizing interface blending consumer food appeal with high-efficiency internal utility.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#1A1A1A",
+    "surfaceSecondary": "#F4F4F5",
+    "onSurfaceSecondary": "#3F3F46",
+    "surfaceTertiary": "#E4E4E7",
+    "onSurfaceTertiary": "#52525B",
+    "surfaceInverse": "#1A1A1A",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#E65100",
+    "brandPrimary": "#E65100",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#F57C00",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#FFF3E0",
+    "onBrandTertiary": "#E65100",
+    "success": "#2E7D32",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F57F17",
+    "onWarning": "#FFFFFF",
+    "error": "#C62828",
+    "onError": "#FFFFFF",
+    "info": "#424242",
+    "onInfo": "#FFFFFF",
+    "border": "#E4E4E7",
+    "borderStrong": "#A1A1AA",
+    "divider": "#F4F4F5"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous padding around content. Clear grouping. Use iOS-native spacing rhythms and comfortable vertical breathing room.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Use glass on sticky headers over scrolling food menus.",
+      "Use glass on the bottom tab bar.",
+      "Use a frosted glass overlay for featured food cards when placed over an image."
+    ],
+    "dont's": [
+      "Never apply glass to the Cook's KDS cards (needs solid contrast for utility).",
+      "Do not blur form fields or body text regions."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Login",
+      "purpose": "Secure authentication acting as a router to the appropriate role-based interface.",
+      "states": {
+        "loading": "Centered spinner",
+        "empty": "N/A",
+        "error": "Readable inline error message with retry"
+      },
+      "layout": "Centered form layout. Logo at the top, followed by Employee ID / credentials input, and a sticky bottom CTA for submission. Safe area respected."
+    },
+    {
+      "name": "Employee_Home",
+      "purpose": "Allow employees to view today's available breakfast/lunch items and add them to cart.",
+      "states": {
+        "loading": "Skeleton of food item cards.",
+        "empty": "Illustration with 'Menu not updated yet' and a refresh CTA.",
+        "error": "Error message with 'Tap to Retry'."
+      },
+      "layout": "Top navigation with a prominent search bar and quick cuisine/dietary filters. Large Hero section (Today's Special) using glassmorphism. Below, a 2-column grid of food items (Image, Name, Availability Badge, Price, Add button). Sticky floating CTA to 'View Cart' appears when items are selected."
+    },
+    {
+      "name": "Employee_Order_Tracking",
+      "purpose": "Track the real-time status of the placed order.",
+      "states": {
+        "loading": "Centered spinner",
+        "empty": "Empty plate illustration: 'No active orders'.",
+        "error": "Error fetching order status."
+      },
+      "layout": "Vertical timeline tracking layout (Pending, Preparing, Ready, Completed). Prominent order number and ETA at the top. Clean, card-based receipt below showing itemized list."
+    },
+    {
+      "name": "Cook_KDS_Dashboard",
+      "purpose": "A highly functional Kitchen Display System (KDS) for the cook to manage incoming orders in real-time.",
+      "states": {
+        "loading": "Skeleton grid",
+        "empty": "Illustration: 'No pending orders - Kitchen is clear!'",
+        "error": "Critical sync error message."
+      },
+      "layout": "Back-of-House (BoH) utility focus. Dark mode preferred natively. Top sticky filter bar for status (New, Preparing, Ready). 2-column or 4-ticket grid of Vertical Ticket Cards. Each Ticket Card has a Header (Bold Order #, Timer, Color-coded Tag), Body (Items with bolded modifiers), and Footer (Large 48x48pt 'Ready' / 'Done' single-tap actions)."
+    },
+    {
+      "name": "Admin_Dashboard",
+      "purpose": "High-level overview of orders, statistics, and inventory management.",
+      "states": {
+        "loading": "Skeleton charts and cards",
+        "empty": "No data available for today.",
+        "error": "Data fetch error."
+      },
+      "layout": "Single-column vertical stack. Sticky header with Date Range. Top 3-4 KPI Cards (Total Revenue, Orders, Active Users) with deltas. One primary Hero Chart (Order volume over time) optimized for touch. Secondary list at the bottom for 'Most Ordered Items'."
+    }
+  ],
+  "images": {
+    "hero_breakfast": {
+      "url": "https://images.pexels.com/photos/19409031/pexels-photo-19409031.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "A sophisticated breakfast spread featuring coffee, eggs, and bread"
+    },
+    "empty_state_plate": {
+      "url": "https://images.pexels.com/photos/12310576/pexels-photo-12310576.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Empty white plate on dark background"
+    },
+    "office_catering": {
+      "url": "https://images.unsplash.com/photo-1672826979217-7156a305acf5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwxfHxvZmZpY2UlMjBjYXRlcmluZyUyMGx1bmNoJTIwc3ByZWFkfGVufDB8fHx8MTc4MjYwODM5NXww&ixlib=rb-4.1.0&q=85",
+      "alt": "A table topped with boxes of sandwiches for office catering"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette. NO BLUES, PURPLES, OR INDIGOS. Use the defined warm Terracotta (#E65100) for primary actions, which simulates appetite and warmth.",
+    "For the Cook's KDS Dashboard, implement a Dark-First utility feel. Rely heavily on `surfaceSecondary` and `surfaceTertiary` for ticket cards, and use Space Mono or JetBrains Mono explicitly for timers and order numbers.",
+    "The Employee view must feature a 'gradient-to-dark scrim' over hero food images. Layer 1: Image, Layer 2: top-to-bottom transparent to 70% surfaceInverse gradient, Layer 3: Text overlay at bottom.",
+    "Use Phosphor icons consistently at 16/20/24 sizes. Keep weight/style uniform (e.g., all filled or all outlined, except active/inactive tab bar).",
+    "Any card layout should fill horizontal space gracefully. Never use 48% width orphans; utilize flexWrap with space-between.",
+    "Ensure 'Submit Order' or 'Checkout' buttons in Employee flows are sticky at the bottom of the screen, layered over a glassmorphism background to remain accessible during scrolling.",
+    "Admin dashboard charts must lead with one Hero Chart that dominates the view, followed by tightly grouped KPIs using the `success` and `error` tokens for deltas."
+  ],
+  "haptics": {
+    "primary_button_press": "impactLight",
+    "add_to_cart": "impactMedium",
+    "cook_mark_ready": "notificationSuccess",
+    "tab_change": "selection"
+  }
+}
