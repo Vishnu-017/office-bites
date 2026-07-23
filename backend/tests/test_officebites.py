@@ -4,7 +4,7 @@ import pytest
 import requests
 from datetime import datetime, timezone, timedelta
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://kitchen-prep-sync.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://kitchen-order-hub-18.preview.emergentagent.com').rstrip('/')
 API = f"{BASE_URL}/api"
 
 ADMIN = {"employee_id": "admin", "password": "admin123"}
