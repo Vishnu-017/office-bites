@@ -1,45 +1,52 @@
 # OfficeBites — Product Requirements Document (MVP)
 
 ## Overview
-A React Native (Expo) mobile app for office breakfast ordering with **three role-based interfaces** in a single app: Employee, Cook (kitchen staff) and Admin.
+A web-based PWA for office breakfast ordering with **three role-based interfaces** in a single app: Employee, Cook (kitchen staff) and Admin. Installable, with offline-capable service worker and Web Push notifications.
 
 ## Tech Stack
-- Frontend: Expo (SDK 54) + expo-router, TypeScript, React Native, expo-secure-store, expo-image, expo-linear-gradient
-- Backend: FastAPI, Motor (MongoDB async), python-jose JWT, bcrypt password hashing, WebSocket for real-time
+- Frontend: React 18 + TypeScript, Vite, React Router, `vite-plugin-pwa` (PWA/service worker)
+- Backend: FastAPI, Motor (MongoDB async), PyJWT (HS256), bcrypt password hashing, `pywebpush` (VAPID) for push notifications
 - Database: MongoDB (single instance)
-- Storage: MongoDB collections `employees`, `menu_items`, `orders`, `notifications`
+- Storage: MongoDB collections `employees`, `menu_items`, `orders`, `notifications`, `updates`, `polls`
 
 ## Roles & Screens
-### Employee (`/(employee)`) — 4 tabs
-- **Menu** — hero card, category chips, search, add-to-cart with quantity, sticky View Cart CTA
-- **Cart** — quantity adjust, notes, checkout → creates order, clears cart, navigates to Orders
-- **Orders** — timeline (pending → accepted → preparing → ready → completed), live via WebSocket
-- **Notifications** — in-app feed, unread badge, mark-all-read
+### Employee (`/employee`)
+- **Menu** — category browsing, search, add-to-cart with quantity
+- **Cart** — quantity adjust, notes, checkout → creates order, clears cart
+- **Orders** — status timeline (pending → accepted → preparing → ready → completed)
+- **Polls** — vote in active polls
+- **Updates** — announcement feed
 - **Profile** — logout
 
-### Cook (`/(cook)`) — dark-first KDS
-- **Kitchen** — sticky filter chips (Active/New/Preparing/Ready/Done), live ticket cards with mono-space timer, single-tap status advancement
-- **Menu Manage** — CRUD daily items, toggle availability, edit stock/price
+### Cook (`/cook`)
+- **Dashboard** — kitchen ticket view, status advancement per order
 - **Profile** — logout
 
-### Admin (`/(admin)`) — 4 tabs
-- **Dashboard** — 4 KPI cards, weekly bar chart, most-ordered items, **Export CSV** button
-- **Menu** — full CRUD + delete
+### Admin (`/admin`)
+- **Dashboard** — KPIs, analytics, CSV export
+- **Menu** — full CRUD
 - **Users** — CRUD employees/cooks/admins with role assignment
+- **Polls** — create/manage polls, view responses
+- **Updates** — create/manage announcements
 - **Profile** — logout
 
 ## Backend API (all `/api` prefix)
-- `POST /auth/login` — JWT (accepts employee_id OR email)
+- `POST /auth/login` — JWT (accepts employee_id)
 - `GET /auth/me`
 - `GET/POST/PUT/DELETE /menu[/{id}]` — role-gated
-- `POST /orders`, `GET /orders?scope=mine|active|all`, `GET /orders/{id}`, `PUT /orders/{id}/status`
+- `POST /orders`, `GET /orders?scope=...`, `GET /orders/{id}`, `PUT /orders/{id}/status`, `DELETE /orders/history`
 - `GET /notifications`, `POST /notifications/{id}/read`, `POST /notifications/read-all`
+- `GET /push/vapid-public-key`, `POST /push/subscribe`, `POST /push/unsubscribe`, `POST /push/test`
 - `GET/POST/PUT/DELETE /users[/{employee_id}]` — admin only
-- `GET /analytics/summary`, `GET /analytics/export` (CSV) — admin only
-- `WS /api/ws?token=...` — real-time order + notification pushes to cooks, admins, and the ordering employee
+- `GET /analytics/summary`, `GET /analytics/export` (CSV), `GET /analytics/polls` — admin only
+- `GET/POST/PUT/DELETE /updates[/{id}]` — announcements
+- `GET /polls/today`, `GET/POST/PUT/DELETE /polls[/{id}]`, `POST /polls/{id}/vote`, `GET /polls/{id}/responses`
 
 ## Auth
-Custom JWT (HS256, 7-day expiry). Passwords bcrypt-hashed. Token stored in `expo-secure-store` (native) or `localStorage` (web). Role-based route guards on both frontend layouts and backend `RoleChecker` dependency.
+Custom JWT (HS256, 7-day expiry). Passwords bcrypt-hashed. Token stored in `localStorage`. Role-based route guards on both frontend layouts and backend dependency checks.
+
+## Notifications
+Real-time-ish updates are delivered via Web Push (VAPID keys, `pywebpush`) plus an in-app notifications feed, rather than a persistent WebSocket connection.
 
 ## Seed Data
 5 users (admin, cook, 3 employees) + 8 menu items on startup (idempotent). See `/app/memory/test_credentials.md`.
