@@ -1,4 +1,5 @@
 import Layout from '../../components/Layout';
+import './Dashboard.css';
 
 export default function AdminProfile() {
   const tabs = [
@@ -12,9 +13,9 @@ export default function AdminProfile() {
 
   return (
     <Layout tabs={tabs}>
-      <div className="container" style={{ padding: 'var(--spacing-lg)' }}>
-        <h2>Admin Profile</h2>
-        <p>Admin Profile - Coming soon</p>
+      <div className="container admin-page">
+        <h2 className="page-title">Admin Profile</h2>
+        <p>Profile management - Coming soon in next iteration</p>
       </div>
     </Layout>
   );

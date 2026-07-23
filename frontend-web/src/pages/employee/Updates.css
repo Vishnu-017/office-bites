@@ -1,0 +1,68 @@
+.updates-page {
+  padding: var(--spacing-lg);
+}
+
+.updates-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.update-card {
+  background-color: var(--color-surface-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+.update-card.pinned {
+  border: 2px solid var(--color-brand);
+  background-color: var(--color-brand-light);
+}
+
+.pinned-badge {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  background-color: var(--color-brand);
+  color: white;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.update-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.update-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  flex: 1;
+}
+
+.priority-badge {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.update-body {
+  color: var(--color-on-surface);
+  font-size: var(--font-base);
+  line-height: 1.6;
+  margin-bottom: var(--spacing-md);
+  white-space: pre-wrap;
+}
+
+.update-time {
+  font-size: var(--font-sm);
+  color: var(--color-on-surface-secondary);
+}

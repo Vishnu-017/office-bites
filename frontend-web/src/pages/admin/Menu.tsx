@@ -1,4 +1,5 @@
 import Layout from '../../components/Layout';
+import './Dashboard.css';
 
 export default function AdminMenu() {
   const tabs = [
@@ -12,9 +13,9 @@ export default function AdminMenu() {
 
   return (
     <Layout tabs={tabs}>
-      <div className="container" style={{ padding: 'var(--spacing-lg)' }}>
-        <h2>Admin Menu</h2>
-        <p>Admin Menu - Coming soon</p>
+      <div className="container admin-page">
+        <h2 className="page-title">Admin Menu</h2>
+        <p>Menu management - Coming soon in next iteration</p>
       </div>
     </Layout>
   );

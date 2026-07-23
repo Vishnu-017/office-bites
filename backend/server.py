@@ -366,6 +366,9 @@ async def create_order(payload: OrderCreate, user: dict = Depends(get_current_us
             raise HTTPException(status_code=400, detail=f"{menu_item['name']} is unavailable")
         if it.quantity <= 0:
             raise HTTPException(status_code=400, detail="Invalid quantity")
+        # NEW: Maximum quantity limit of 3 per item
+        if it.quantity > 3:
+            raise HTTPException(status_code=400, detail=f"Maximum order limit for {menu_item['name']} is 3")
         line = {
             "item_id": menu_item["id"],
             "name": menu_item["name"],

@@ -1,4 +1,5 @@
 import Layout from '../../components/Layout';
+import './Dashboard.css';
 
 export default function AdminPolls() {
   const tabs = [
@@ -12,9 +13,9 @@ export default function AdminPolls() {
 
   return (
     <Layout tabs={tabs}>
-      <div className="container" style={{ padding: 'var(--spacing-lg)' }}>
-        <h2>Admin Polls</h2>
-        <p>Admin Polls - Coming soon</p>
+      <div className="container admin-page">
+        <h2 className="page-title">Admin Polls</h2>
+        <p>Polls management - Coming soon in next iteration</p>
       </div>
     </Layout>
   );
