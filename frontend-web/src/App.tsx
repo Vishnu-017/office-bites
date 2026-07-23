@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import EmployeeMenu from './pages/employee/Menu';
@@ -15,6 +16,7 @@ import AdminUpdates from './pages/admin/Updates';
 import AdminPolls from './pages/admin/Polls';
 import AdminUsers from './pages/admin/Users';
 import AdminProfile from './pages/admin/Profile';
+import { registerPushForUser } from './utils/push';
 
 function App() {
   return (
@@ -28,6 +30,16 @@ function App() {
 
 function AppRoutes() {
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    registerPushForUser(user.token).catch((error) => {
+      // Push can fail on unsupported devices or blocked permissions; app should continue to work.
+      console.warn('Push registration skipped:', error);
+    });
+  }, [user]);
 
   if (loading) {
     return (

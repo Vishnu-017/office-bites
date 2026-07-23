@@ -14,11 +14,30 @@ interface Update {
   created_at: string;
 }
 
+const PRIORITY_META: Record<string, { color: string; icon: string }> = {
+  high: { color: 'var(--color-error)', icon: '🔴' },
+  medium: { color: 'var(--color-warning)', icon: '🟡' },
+  low: { color: 'var(--color-info)', icon: '🔵' },
+};
+
+function priorityMeta(priority: string) {
+  return PRIORITY_META[priority] || { color: 'var(--color-on-surface-secondary)', icon: '⚪' };
+}
+
+const tabs = [
+  { path: '/employee/menu', label: 'Menu', icon: '🍽️' },
+  { path: '/employee/orders', label: 'Orders', icon: '📋' },
+  { path: '/employee/updates', label: 'Updates', icon: '📢' },
+  { path: '/employee/polls', label: 'Polls', icon: '🗳️' },
+  { path: '/employee/profile', label: 'Profile', icon: '👤' },
+];
+
 export default function EmployeeUpdates() {
   const { user } = useAuth();
   const [updates, setUpdates] = useState<Update[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     loadUpdates();
@@ -32,38 +51,12 @@ export default function EmployeeUpdates() {
         if (!a.pinned && b.pinned) return 1;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'var(--color-error)';
-      case 'medium': return 'var(--color-warning)';
-      case 'low': return 'var(--color-info)';
-      default: return 'var(--color-on-surface-secondary)';
-    }
-  };
-
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case 'high': return '🔴';
-      case 'medium': return '🟡';
-      case 'low': return '🔵';
-      default: return '⚪';
-    }
-  };
-
-  const tabs = [
-    { path: '/employee/menu', label: 'Menu', icon: '🍽️' },
-    { path: '/employee/orders', label: 'Orders', icon: '📋' },
-    { path: '/employee/updates', label: 'Updates', icon: '📢' },
-    { path: '/employee/polls', label: 'Polls', icon: '🗳️' },
-    { path: '/employee/profile', label: 'Profile', icon: '👤' },
-  ];
 
   if (loading) {
     return (
@@ -78,11 +71,9 @@ export default function EmployeeUpdates() {
   return (
     <Layout tabs={tabs}>
       <div className="container updates-page">
-        <h2 className="page-title">Updates & Announcements</h2>
+        <h2 className="page-title">Updates &amp; Announcements</h2>
 
-        {error && (
-          <div className="error-banner">{error}</div>
-        )}
+        {error && <div className="error-banner">{error}</div>}
 
         {updates.length === 0 ? (
           <div className="empty-state">
@@ -92,27 +83,31 @@ export default function EmployeeUpdates() {
           </div>
         ) : (
           <div className="updates-list">
-            {updates.map(update => (
-              <div key={update.id} className={`update-card ${update.pinned ? 'pinned' : ''}`}>
-                {update.pinned && (
-                  <div className="pinned-badge">📌 Pinned</div>
-                )}
-                
-                <div className="update-header">
-                  <h3 className="update-title">{update.title}</h3>
-                  <span 
-                    className="priority-badge"
-                    style={{ color: getPriorityColor(update.priority) }}
-                  >
-                    {getPriorityIcon(update.priority)} {update.priority}
-                  </span>
+            {updates.map(update => {
+              const expanded = expandedId === update.id;
+              const pm = priorityMeta(update.priority);
+              return (
+                <div key={update.id} className={`update-row ${update.pinned ? 'pinned' : ''}`}>
+                  <button className="update-row-head" onClick={() => setExpandedId(expanded ? null : update.id)}>
+                    <span className="update-row-icon">{pm.icon}</span>
+                    <span className="update-row-main">
+                      <span className="update-row-title">
+                        {update.pinned && <span className="pin-dot">📌</span>}
+                        {update.title}
+                      </span>
+                      <span className="update-row-time">{formatISTDateTime(update.created_at)}</span>
+                    </span>
+                    <span className="update-row-chevron">{expanded ? '▲' : '▼'}</span>
+                  </button>
+                  {expanded && (
+                    <div className="update-row-body">
+                      <p>{update.body}</p>
+                      <span className="priority-badge" style={{ color: pm.color }}>{pm.icon} {update.priority}</span>
+                    </div>
+                  )}
                 </div>
-
-                <p className="update-body">{update.body}</p>
-
-                <p className="update-time">{formatISTDateTime(update.created_at)}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

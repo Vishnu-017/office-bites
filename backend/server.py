@@ -8,6 +8,8 @@ import os
 import io
 import csv
 import logging
+import json
+import importlib
 import jwt
 import bcrypt
 from pathlib import Path
@@ -30,6 +32,9 @@ db = mongo_client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'officebites-dev-secret-change-in-prod')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRE_HOURS = 24 * 7
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_SUBJECT = os.environ.get('VAPID_SUBJECT', 'mailto:admin@officebites.com')
 
 # Order cutoff time (breakfast orders close at 9:00 AM local)
 ORDER_CUTOFF_HOUR = 9
@@ -133,8 +138,13 @@ class OrderItem(BaseModel):
     quantity: int
 
 
+class OrderItemRequest(BaseModel):
+    item_id: str
+    quantity: int
+
+
 class OrderCreate(BaseModel):
-    items: List[OrderItem]
+    items: List[OrderItemRequest]
     notes: Optional[str] = ""
 
 
@@ -162,6 +172,25 @@ class Notification(BaseModel):
     order_id: Optional[str] = None
     read: bool = False
     created_at: str
+
+
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: PushSubscriptionKeys
+
+
+class PushSubscribeRequest(BaseModel):
+    subscription: PushSubscription
+
+
+class PushTestRequest(BaseModel):
+    title: str = "Test notification"
+    body: str = "Push notifications are working"
 
 
 # ============= AUTH HELPERS =============
@@ -250,14 +279,82 @@ ws_manager = ConnectionManager()
 
 
 # ============= HELPERS =============
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def now_ist() -> datetime:
+    return datetime.now(timezone.utc).astimezone(IST)
+
+
+def today_ist_str() -> str:
+    return now_ist().strftime("%Y-%m-%d")
+
+
+def ist_midnight_utc_iso(days_ago: int = 0) -> str:
+    ist_today = now_ist().date() - timedelta(days=days_ago)
+    ist_midnight = datetime.combine(ist_today, dt_time.min, tzinfo=IST)
+    return ist_midnight.astimezone(timezone.utc).isoformat()
 
 
 def clean(doc: dict) -> dict:
     if doc and "_id" in doc:
         doc.pop("_id", None)
     return doc
+
+
+def push_enabled() -> bool:
+    return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
+
+
+async def send_web_push(employee_id: str, title: str, body: str, order_id: Optional[str] = None):
+    if not push_enabled():
+        return
+
+    try:
+        pywebpush_mod = importlib.import_module("pywebpush")
+        webpush = pywebpush_mod.webpush
+        webpush_exception_cls = pywebpush_mod.WebPushException
+    except Exception:
+        logger.warning("pywebpush is not installed; skipping web push delivery")
+        return
+
+    payload = {
+        "title": title,
+        "body": body,
+        "order_id": order_id,
+        "url": "/employee/orders" if order_id else "/employee/updates",
+        "timestamp": now_iso(),
+    }
+
+    subs = await db.push_subscriptions.find({"employee_id": employee_id}, {"_id": 0}).to_list(200)
+    stale_endpoints: List[str] = []
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info=sub["subscription"],
+                data=json.dumps(payload),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_SUBJECT},
+            )
+        except Exception as exc:
+            if not isinstance(exc, webpush_exception_cls):
+                logger.warning("Unexpected web push error for %s: %s", employee_id, str(exc))
+                continue
+            status_code = getattr(exc.response, "status_code", None) if getattr(exc, "response", None) else None
+            if status_code in (404, 410):
+                stale_endpoints.append(sub["endpoint"])
+            else:
+                logger.warning("Web push failed for %s: %s", employee_id, str(exc))
+
+    if stale_endpoints:
+        await db.push_subscriptions.delete_many({
+            "employee_id": employee_id,
+            "endpoint": {"$in": stale_endpoints},
+        })
 
 
 async def push_notification(employee_id: str, title: str, body: str, order_id: Optional[str] = None):
@@ -272,6 +369,7 @@ async def push_notification(employee_id: str, title: str, body: str, order_id: O
     }
     await db.notifications.insert_one(notif.copy())
     await ws_manager.send_to_user(employee_id, {"type": "notification", "data": clean(notif)})
+    await send_web_push(employee_id, title, body, order_id)
 
 
 # ============= AUTH ROUTES =============
@@ -347,8 +445,7 @@ async def delete_menu_item(item_id: str, user: dict = Depends(require_roles("adm
 
 # ============= ORDER ROUTES =============
 def is_within_cutoff() -> bool:
-    now = datetime.now()
-    return now.hour < ORDER_CUTOFF_HOUR
+    return now_ist().hour < ORDER_CUTOFF_HOUR
 
 
 @api_router.post("/orders", response_model=Order)
@@ -452,6 +549,26 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: d
     return order
 
 
+@api_router.delete("/orders/history")
+async def clear_order_history(user: dict = Depends(require_roles("admin"))):
+    orders_result = await db.orders.delete_many({})
+    notifications_result = await db.notifications.delete_many({"order_id": {"$exists": True}})
+
+    # Push a realtime clear signal so all open employee/cook/admin pages refresh immediately.
+    await ws_manager.broadcast_to_role("cook", {"type": "order_history_cleared"})
+    await ws_manager.broadcast_to_role("admin", {"type": "order_history_cleared"})
+
+    employee_ids = await db.employees.distinct("employee_id", {"role": "employee", "active": True})
+    for employee_id in employee_ids:
+        await ws_manager.send_to_user(employee_id, {"type": "order_history_cleared"})
+
+    return {
+        "success": True,
+        "orders_deleted": orders_result.deleted_count,
+        "notifications_deleted": notifications_result.deleted_count,
+    }
+
+
 # ============= NOTIFICATIONS =============
 @api_router.get("/notifications", response_model=List[Notification])
 async def list_notifications(user: dict = Depends(get_current_user)):
@@ -468,6 +585,43 @@ async def mark_read(notif_id: str, user: dict = Depends(get_current_user)):
 @api_router.post("/notifications/read-all")
 async def mark_all_read(user: dict = Depends(get_current_user)):
     await db.notifications.update_many({"employee_id": user["employee_id"], "read": False}, {"$set": {"read": True}})
+    return {"success": True}
+
+
+# ============= WEB PUSH =============
+@api_router.get("/push/vapid-public-key")
+async def get_vapid_public_key(user: dict = Depends(get_current_user)):
+    if not VAPID_PUBLIC_KEY:
+        raise HTTPException(status_code=503, detail="Push notifications are not configured")
+    return {"public_key": VAPID_PUBLIC_KEY}
+
+
+@api_router.post("/push/subscribe")
+async def subscribe_push(payload: PushSubscribeRequest, user: dict = Depends(get_current_user)):
+    endpoint = payload.subscription.endpoint
+    await db.push_subscriptions.update_one(
+        {"employee_id": user["employee_id"], "endpoint": endpoint},
+        {"$set": {
+            "employee_id": user["employee_id"],
+            "endpoint": endpoint,
+            "subscription": payload.subscription.model_dump(),
+            "updated_at": now_iso(),
+        }, "$setOnInsert": {"created_at": now_iso()}},
+        upsert=True,
+    )
+    return {"success": True}
+
+
+@api_router.post("/push/unsubscribe")
+async def unsubscribe_push(payload: PushSubscribeRequest, user: dict = Depends(get_current_user)):
+    endpoint = payload.subscription.endpoint
+    await db.push_subscriptions.delete_one({"employee_id": user["employee_id"], "endpoint": endpoint})
+    return {"success": True}
+
+
+@api_router.post("/push/test")
+async def test_push(payload: PushTestRequest, user: dict = Depends(get_current_user)):
+    await push_notification(user["employee_id"], payload.title, payload.body)
     return {"success": True}
 
 
@@ -529,7 +683,7 @@ async def delete_user(employee_id: str, user: dict = Depends(require_roles("admi
 # ============= ADMIN ANALYTICS =============
 @api_router.get("/analytics/summary")
 async def analytics_summary(user: dict = Depends(require_roles("admin"))):
-    today_start = datetime.combine(datetime.now(timezone.utc).date(), dt_time.min, tzinfo=timezone.utc).isoformat()
+    today_start = ist_midnight_utc_iso()
     week_start = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
     total_orders_today = await db.orders.count_documents({"created_at": {"$gte": today_start}})
@@ -583,7 +737,7 @@ async def analytics_summary(user: dict = Depends(require_roles("admin"))):
 
 @api_router.get("/analytics/export")
 async def export_csv(user: dict = Depends(require_roles("admin"))):
-    today_start = datetime.combine(datetime.now(timezone.utc).date(), dt_time.min, tzinfo=timezone.utc).isoformat()
+    today_start = ist_midnight_utc_iso()
     orders = await db.orders.find({"created_at": {"$gte": today_start}}, {"_id": 0}).sort("created_at", 1).to_list(5000)
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -595,7 +749,7 @@ async def export_csv(user: dict = Depends(require_roles("admin"))):
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="orders_{datetime.now().strftime("%Y%m%d")}.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="orders_{today_ist_str().replace("-", "")}.csv"'},
     )
 
 
@@ -634,7 +788,7 @@ async def seed_data():
     # Seed users
     seed_users = [
         {"employee_id": "admin", "name": "Admin User", "email": "admin@officebites.com", "role": "admin", "password": "admin123"},
-        {"employee_id": "cook", "name": "Chef Bob", "email": "cook@officebites.com", "role": "cook", "password": "cook123"},
+        {"employee_id": "cook", "name": "Madhusudhan", "email": "cook@officebites.com", "role": "cook", "password": "cook123"},
         {"employee_id": "EMP001", "name": "Alice Johnson", "email": "alice@officebites.com", "role": "employee", "password": "emp123"},
         {"employee_id": "EMP002", "name": "David Kim", "email": "david@officebites.com", "role": "employee", "password": "emp123"},
         {"employee_id": "EMP003", "name": "Priya Sharma", "email": "priya@officebites.com", "role": "employee", "password": "emp123"},
@@ -658,22 +812,20 @@ async def seed_data():
     count = await db.menu_items.count_documents({})
     if count == 0:
         items = [
-            {"name": "Boiled Egg", "description": "Two fresh farm eggs, soft or hard boiled", "price": 30.0, "category": "Breakfast",
-             "image_url": "https://images.unsplash.com/photo-1607690424560-cee2564cc23a?w=600&auto=format&fit=crop", "stock": 50},
-            {"name": "Idli (3 pcs)", "description": "Steamed rice cakes served with sambar & chutney", "price": 50.0, "category": "Breakfast",
-             "image_url": "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=600&auto=format&fit=crop", "stock": 40},
-            {"name": "Masala Dosa", "description": "Crispy dosa with spiced potato filling", "price": 70.0, "category": "Breakfast",
-             "image_url": "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=600&auto=format&fit=crop", "stock": 30},
-            {"name": "Filter Coffee", "description": "Traditional South Indian filter coffee", "price": 25.0, "category": "Beverage",
-             "image_url": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&auto=format&fit=crop", "stock": 100},
-            {"name": "Masala Chai", "description": "Spiced Indian tea with milk", "price": 20.0, "category": "Beverage",
-             "image_url": "https://images.unsplash.com/photo-1571934811356-5cc061b6821f?w=600&auto=format&fit=crop", "stock": 100},
-            {"name": "Poha", "description": "Flattened rice with peanuts and curry leaves", "price": 40.0, "category": "Breakfast",
-             "image_url": "https://images.unsplash.com/photo-1743793377419-4a9d64c4f65a?w=600&auto=format&fit=crop", "stock": 35},
-            {"name": "Aloo Paratha", "description": "Whole wheat flatbread stuffed with spiced potatoes", "price": 60.0, "category": "Breakfast",
-             "image_url": "https://images.unsplash.com/photo-1567337710282-00832b415979?w=600&auto=format&fit=crop", "stock": 25},
-            {"name": "Fruit Bowl", "description": "Seasonal fresh fruits", "price": 55.0, "category": "Healthy",
-             "image_url": "https://images.unsplash.com/photo-1490474504059-bf2db5ab2348?w=600&auto=format&fit=crop", "stock": 20},
+            {"name": "Egg Sandwich", "description": "Grilled sandwich with spiced boiled egg filling", "category": "Breakfast",
+             "image_url": "https://plus.unsplash.com/premium_photo-1723629749871-881a10d9daaa?w=600&auto=format&fit=crop"},
+            {"name": "Paneer Sandwich", "description": "Grilled sandwich with spiced paneer filling", "category": "Breakfast",
+             "image_url": "https://images.unsplash.com/photo-1673534751361-a610db445eef?w=600&auto=format&fit=crop"},
+            {"name": "Bread Omlette", "description": "Fluffy omelette served with buttered bread slices", "category": "Breakfast",
+             "image_url": "https://images.unsplash.com/photo-1571091716874-3041d15b119d?w=600&auto=format&fit=crop"},
+            {"name": "Veg Maggie", "description": "Instant noodles tossed with mixed vegetables", "category": "Snacks",
+             "image_url": "https://images.unsplash.com/photo-1714611446667-5321c3b4a3c6?w=600&auto=format&fit=crop"},
+            {"name": "Egg Maggie", "description": "Instant noodles tossed with scrambled egg", "category": "Snacks",
+             "image_url": "https://images.unsplash.com/photo-1637024698421-533d83c7b883?w=600&auto=format&fit=crop"},
+            {"name": "Omlette", "description": "Classic fluffy omelette", "category": "Breakfast",
+             "image_url": "https://images.unsplash.com/photo-1510693206972-df098062cb71?w=600&auto=format&fit=crop"},
+            {"name": "Boiled Eggs", "description": "Two fresh farm eggs, boiled", "category": "Breakfast",
+             "image_url": "https://images.unsplash.com/photo-1680987398307-e1ae27a6ed67?w=600&auto=format&fit=crop"},
         ]
         for it in items:
             doc = {
@@ -747,6 +899,13 @@ async def delete_update(update_id: str, user: dict = Depends(require_roles("admi
 
 
 # ============= FOOD POLLS =============
+DEFAULT_POLL_OPTIONS = ["yes", "no"]
+MONDAY, WEDNESDAY = 0, 2  # Python weekday(): Monday=0 ... Sunday=6
+
+LUNCH_OPTIONS_VEG_DAY = ["Non-Veg", "Veg", "No lunch (WFO)"]
+LUNCH_OPTIONS_DEFAULT = ["Yes, I need lunch", "No lunch (WFO)"]
+
+
 class Poll(BaseModel):
     id: str
     kind: str  # "lunch" | "snacks"
@@ -755,6 +914,7 @@ class Poll(BaseModel):
     date: str  # YYYY-MM-DD
     closes_at: str  # ISO
     active: bool = True
+    options: List[str] = Field(default_factory=lambda: list(DEFAULT_POLL_OPTIONS))
     created_at: str
 
 
@@ -765,6 +925,7 @@ class PollCreate(BaseModel):
     date: str
     closes_at: str
     active: bool = True
+    options: List[str] = Field(default_factory=lambda: list(DEFAULT_POLL_OPTIONS))
 
 
 class PollPatch(BaseModel):
@@ -773,42 +934,83 @@ class PollPatch(BaseModel):
     date: Optional[str] = None
     closes_at: Optional[str] = None
     active: Optional[bool] = None
+    options: Optional[List[str]] = None
 
 
 class PollVote(BaseModel):
-    response: str  # "yes" | "no"
+    response: str
 
 
-class PollWithVote(BaseModel):
-    poll: Poll
-    my_vote: Optional[str] = None
-    yes_count: int = 0
-    no_count: int = 0
+def poll_options(poll: dict) -> List[str]:
+    return poll.get("options") or list(DEFAULT_POLL_OPTIONS)
 
 
-def today_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+async def count_poll_options(poll_id: str, options: List[str]) -> Dict[str, int]:
+    return {opt: await db.poll_votes.count_documents({"poll_id": poll_id, "response": opt}) for opt in options}
+
+
+async def ensure_daily_lunch_poll():
+    """Auto-generates today's Lunch poll (Mon-Fri, IST) if one doesn't already exist.
+    Mon/Wed get a Veg/Non-Veg/No-lunch choice; Tue/Thu/Fri get a simple Yes/No-lunch choice.
+    Weekends get no lunch poll."""
+    ist_now = now_ist()
+    weekday = ist_now.weekday()
+    if weekday > 4:  # Saturday, Sunday
+        return
+    today = today_ist_str()
+    existing = await db.polls.find_one({"kind": "lunch", "date": today}, {"_id": 0})
+    if existing:
+        return
+
+    if weekday in (MONDAY, WEDNESDAY):
+        options = list(LUNCH_OPTIONS_VEG_DAY)
+        description = "Choose your lunch option for today."
+    else:
+        options = list(LUNCH_OPTIONS_DEFAULT)
+        description = "Will you have lunch today?"
+
+    closes_at = datetime.combine(ist_now.date(), dt_time(10, 30), tzinfo=IST).astimezone(timezone.utc).isoformat()
+    poll = {
+        "id": str(uuid.uuid4()),
+        "kind": "lunch",
+        "title": "Today's Lunch",
+        "description": description,
+        "date": today,
+        "closes_at": closes_at,
+        "active": True,
+        "options": options,
+        "created_at": now_iso(),
+    }
+    await db.polls.insert_one(poll.copy())
+    employees = await db.employees.find({"role": "employee", "active": True}, {"_id": 0, "employee_id": 1}).to_list(1000)
+    for e in employees:
+        await push_notification(e["employee_id"], "New food poll", poll["title"])
+    await ws_manager.broadcast_to_role("admin", {"type": "poll_vote", "poll_id": poll["id"]})
 
 
 @api_router.get("/polls/today")
 async def polls_today(user: dict = Depends(get_current_user)):
-    today = today_str()
+    await ensure_daily_lunch_poll()
+    today = today_ist_str()
     polls = await db.polls.find({"date": today, "active": True}, {"_id": 0}).to_list(10)
     result = []
     for p in polls:
-        yes = await db.poll_votes.count_documents({"poll_id": p["id"], "response": "yes"})
-        no = await db.poll_votes.count_documents({"poll_id": p["id"], "response": "no"})
+        options = poll_options(p)
+        p["options"] = options
+        counts = await count_poll_options(p["id"], options)
         my = await db.poll_votes.find_one({"poll_id": p["id"], "employee_id": user["employee_id"]}, {"_id": 0})
-        result.append({"poll": p, "my_vote": my["response"] if my else None, "yes_count": yes, "no_count": no})
+        result.append({"poll": p, "my_vote": my["response"] if my else None, "option_counts": counts})
     return result
 
 
 @api_router.get("/polls")
 async def list_polls(user: dict = Depends(require_roles("admin"))):
+    await ensure_daily_lunch_poll()
     polls = await db.polls.find({}, {"_id": 0}).sort("date", -1).to_list(200)
     for p in polls:
-        p["yes_count"] = await db.poll_votes.count_documents({"poll_id": p["id"], "response": "yes"})
-        p["no_count"] = await db.poll_votes.count_documents({"poll_id": p["id"], "response": "no"})
+        options = poll_options(p)
+        p["options"] = options
+        p["option_counts"] = await count_poll_options(p["id"], options)
     return polls
 
 
@@ -816,6 +1018,8 @@ async def list_polls(user: dict = Depends(require_roles("admin"))):
 async def create_poll(payload: PollCreate, user: dict = Depends(require_roles("admin"))):
     if payload.kind not in ("lunch", "snacks"):
         raise HTTPException(status_code=400, detail="kind must be lunch or snacks")
+    if len(payload.options) < 2:
+        raise HTTPException(status_code=400, detail="A poll needs at least 2 options")
     # Upsert per (kind, date)
     existing = await db.polls.find_one({"kind": payload.kind, "date": payload.date}, {"_id": 0})
     if existing:
@@ -834,6 +1038,8 @@ async def update_poll(poll_id: str, payload: PollPatch, user: dict = Depends(req
     upd = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to update")
+    if "options" in upd and len(upd["options"]) < 2:
+        raise HTTPException(status_code=400, detail="A poll needs at least 2 options")
     res = await db.polls.update_one({"id": poll_id}, {"$set": upd})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Poll not found")
@@ -854,11 +1060,12 @@ async def delete_poll(poll_id: str, user: dict = Depends(require_roles("admin"))
 
 @api_router.post("/polls/{poll_id}/vote")
 async def vote_poll(poll_id: str, payload: PollVote, user: dict = Depends(get_current_user)):
-    if payload.response not in ("yes", "no"):
-        raise HTTPException(status_code=400, detail="response must be yes or no")
     poll = await db.polls.find_one({"id": poll_id}, {"_id": 0})
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
+    options = poll_options(poll)
+    if payload.response not in options:
+        raise HTTPException(status_code=400, detail=f"response must be one of: {', '.join(options)}")
     if not poll.get("active", True):
         raise HTTPException(status_code=400, detail="Poll is closed")
     try:
@@ -880,11 +1087,20 @@ async def vote_poll(poll_id: str, payload: PollVote, user: dict = Depends(get_cu
 
 
 @api_router.get("/polls/{poll_id}/responses")
-async def poll_responses(poll_id: str, user: dict = Depends(require_roles("admin"))):
+async def poll_responses(poll_id: str, user: dict = Depends(get_current_user)):
+    poll = await db.polls.find_one({"id": poll_id}, {"_id": 0})
+    if not poll:
+        raise HTTPException(status_code=404, detail="Poll not found")
+    options = poll_options(poll)
     votes = await db.poll_votes.find({"poll_id": poll_id}, {"_id": 0}).sort("voted_at", -1).to_list(500)
-    yes = [v for v in votes if v["response"] == "yes"]
-    no = [v for v in votes if v["response"] == "no"]
-    return {"yes_count": len(yes), "no_count": len(no), "yes": yes, "no": no}
+    grouped: Dict[str, List[dict]] = {opt: [] for opt in options}
+    for v in votes:
+        grouped.setdefault(v["response"], []).append(v)
+    return {
+        "options": options,
+        "counts": {opt: len(grouped.get(opt, [])) for opt in options},
+        "responses": grouped,
+    }
 
 
 @api_router.get("/analytics/polls")
@@ -895,18 +1111,19 @@ async def poll_analytics(user: dict = Depends(require_roles("admin"))):
         {"$group": {"_id": {"date": "$poll.date", "kind": "$poll.kind", "response": "$response"}, "count": {"$sum": 1}}},
         {"$sort": {"_id.date": -1}},
     ]
-    rows = await db.poll_votes.aggregate(pipeline).to_list(500)
+    rows = await db.poll_votes.aggregate(pipeline).to_list(1000)
     trend: Dict[str, Dict] = {}
     for r in rows:
         d = r["_id"]["date"]; k = r["_id"]["kind"]; resp = r["_id"]["response"]
-        trend.setdefault(d, {"date": d, "lunch_yes": 0, "lunch_no": 0, "snacks_yes": 0, "snacks_no": 0})
-        trend[d][f"{k}_{resp}"] = r["count"]
+        day = trend.setdefault(d, {"date": d, "lunch": {}, "snacks": {}})
+        day.setdefault(k, {})[resp] = r["count"]
     return {"trend": sorted(trend.values(), key=lambda x: x["date"], reverse=True)[:14]}
 
 
 @app.on_event("startup")
 async def startup():
     await seed_data()
+    await ensure_daily_lunch_poll()
 
 
 app.include_router(api_router)

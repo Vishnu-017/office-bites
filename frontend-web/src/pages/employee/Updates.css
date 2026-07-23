@@ -5,64 +5,85 @@
 .updates-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
 }
 
-.update-card {
+.update-row {
   background-color: var(--color-surface-secondary);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
   box-shadow: var(--shadow-sm);
-  position: relative;
+  overflow: hidden;
 }
 
-.update-card.pinned {
+.update-row.pinned {
   border: 2px solid var(--color-brand);
   background-color: var(--color-brand-light);
 }
 
-.pinned-badge {
-  position: absolute;
-  top: var(--spacing-sm);
-  right: var(--spacing-sm);
-  background-color: var(--color-brand);
-  color: white;
-  padding: 4px 12px;
-  border-radius: var(--radius-full);
-  font-size: var(--font-xs);
-  font-weight: 700;
-}
-
-.update-header {
+.update-row-head {
+  width: 100%;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  min-height: 44px;
 }
 
-.update-title {
+.update-row-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.update-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.update-row-title {
   font-size: var(--font-lg);
   font-weight: 700;
-  flex: 1;
+  color: var(--color-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pin-dot {
+  margin-right: 6px;
+}
+
+.update-row-time {
+  font-size: var(--font-xs);
+  color: var(--color-on-surface-secondary);
+}
+
+.update-row-chevron {
+  color: var(--color-on-surface-tertiary);
+  font-size: var(--font-sm);
+  flex-shrink: 0;
+}
+
+.update-row-body {
+  padding: 0 var(--spacing-lg) var(--spacing-lg);
+}
+
+.update-row-body p {
+  color: var(--color-on-surface);
+  font-size: var(--font-base);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin-bottom: var(--spacing-sm);
 }
 
 .priority-badge {
   font-size: var(--font-xs);
   font-weight: 700;
   text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.update-body {
-  color: var(--color-on-surface);
-  font-size: var(--font-base);
-  line-height: 1.6;
-  margin-bottom: var(--spacing-md);
-  white-space: pre-wrap;
-}
-
-.update-time {
-  font-size: var(--font-sm);
-  color: var(--color-on-surface-secondary);
 }

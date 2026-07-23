@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../context/AuthContext';
 import { apiCall, wsUrl } from '../../api/client';
-import { formatISTDateTime, formatISTTime } from '../../utils/datetime';
+import { formatISTDateTime } from '../../utils/datetime';
 import './Orders.css';
 
 interface OrderItem {
   item_id: string;
-  item_name: string;
+  name: string;
   quantity: number;
 }
 
@@ -17,6 +17,7 @@ interface Order {
   employee_name: string;
   items: OrderItem[];
   status: string;
+  notes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -43,8 +44,8 @@ export default function EmployeeOrders() {
     try {
       const data = await apiCall<Order[]>('/api/orders', user?.token || null);
       setOrders(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -74,6 +75,8 @@ export default function EmployeeOrders() {
               return [data.order, ...prevOrders];
             }
           });
+        } else if (data.type === 'order_history_cleared') {
+          setOrders([]);
         }
       };
 
@@ -170,11 +173,17 @@ export default function EmployeeOrders() {
                 <div className="order-items">
                   {order.items.map((item, idx) => (
                     <div key={idx} className="order-item">
-                      <span className="item-name">{item.item_name}</span>
+                      <span className="item-name">{item.name}</span>
                       <span className="item-quantity">×{item.quantity}</span>
                     </div>
                   ))}
                 </div>
+
+                {order.notes && (
+                  <p style={{ fontSize: 'var(--font-sm)', color: 'var(--color-on-surface-secondary)', fontStyle: 'italic', marginTop: 'var(--spacing-sm)' }}>
+                    📝 {order.notes}
+                  </p>
+                )}
 
                 {order.status === 'ready' && (
                   <div className="ready-alert">

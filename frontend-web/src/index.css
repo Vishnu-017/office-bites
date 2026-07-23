@@ -139,6 +139,17 @@ body {
   background-color: var(--color-on-surface-tertiary);
 }
 
+.btn-danger {
+  background-color: var(--color-error);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.95);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
 .card {
   background-color: var(--color-surface-secondary);
   border-radius: var(--radius-lg);

@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(firecrawl-scrape)",
+      "Skill(firecrawl-scrape:*)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0 Safari/537.36\" \"https://www.pinterest.com/pin/869054059323643229/\" -o /tmp/pin.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" \"https://i.pinimg.com/originals/d5/3b/01/d53b014d86a6b6761bf649a0ed813c2b.png\")",
+      "Bash(curl -s -o /tmp/eggmaggi.jpg -w \"%{http_code} %{content_type} %{size_download}\\\\n\" \"https://i.pinimg.com/originals/d4/c6/e3/d4c6e30c46e2f713743944d3c22f5555.jpg\")",
+      "Bash(python3 /tmp/update_images.py)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" \"https://www.awesomecuisine.com/wp-content/uploads/2020/03/bread-omelette-500x500.jpg\")",
+      "Bash(firecrawl search *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" \"https://images.unsplash.com/photo-1621188988504-f2a8ff685801?w=600&auto=format&fit=crop\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" \"https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=600&auto=format&fit=crop\")",
+      "Bash(curl -s -o /tmp/eggsandwich1.jpg \"https://images.unsplash.com/photo-1621188988504-f2a8ff685801?w=600&auto=format&fit=crop\")",
+      "Bash(curl -s -o /tmp/eggsandwich2.jpg \"https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=600&auto=format&fit=crop\")",
+      "Bash(python3 /tmp/update_images2.py)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" \"https://recipes.timesofindia.com/recipes/egg-bhurji-sandwich/rs91741738.cms\")",
+      "Bash(curl -s -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0 Safari/537.36\" \"https://recipes.timesofindia.com/recipes/egg-bhurji-sandwich/rs91741738.cms\" -o /tmp/tos_page.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" \"https://static.toiimg.com/thumb/msid-91741738,width-1070,height-580,resizemode-75/91741738,pt-32,y_pad-40/91741738.jpg\")",
+      "Bash(curl -s -o /tmp/eggsandwich_toi.jpg \"https://static.toiimg.com/thumb/msid-91741738,width-1070,height-580,resizemode-75/91741738,pt-32,y_pad-40/91741738.jpg\")",
+      "Bash(python3 /tmp/update_egg_sandwich.py)",
+      "Bash(curl -s -o /tmp/eggsandwich_yt.jpg -w \"%{http_code} %{content_type}\\\\n\" \"https://i.ytimg.com/vi/Stg197cqlA0/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLAUsRC3-noElAwx9bVeFe8UV5OjCQ\")",
+      "Bash(python3 /tmp/update_egg_sandwich2.py)"
+    ],
+    "additionalDirectories": [
+      "/tmp",
+      "/private/tmp"
+    ]
+  }
+}

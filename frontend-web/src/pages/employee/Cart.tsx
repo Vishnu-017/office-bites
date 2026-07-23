@@ -9,7 +9,7 @@ interface MenuItem {
   name: string;
   description: string;
   category: string;
-  image: string;
+  image_url: string;
 }
 
 interface CartItem {
@@ -21,6 +21,7 @@ export default function EmployeeCart() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -33,6 +34,15 @@ export default function EmployeeCart() {
     if (saved) {
       setCart(JSON.parse(saved));
     }
+    const savedNotes = localStorage.getItem('cart_notes');
+    if (savedNotes) {
+      setNotes(savedNotes);
+    }
+  };
+
+  const updateNotes = (value: string) => {
+    setNotes(value);
+    localStorage.setItem('cart_notes', value);
   };
 
   const saveCart = (newCart: CartItem[]) => {
@@ -70,20 +80,20 @@ export default function EmployeeCart() {
     try {
       const items = cart.map(c => ({
         item_id: c.item.id,
-        item_name: c.item.name,
         quantity: c.quantity
       }));
 
       await apiCall('/api/orders', user?.token || null, {
         method: 'POST',
-        body: JSON.stringify({ items })
+        body: JSON.stringify({ items, notes: notes.trim() })
       });
 
       localStorage.removeItem('cart');
+      localStorage.removeItem('cart_notes');
       alert('Order placed successfully!');
       navigate('/employee/orders');
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -138,9 +148,9 @@ export default function EmployeeCart() {
             <div style={{ marginBottom: 'var(--spacing-xl)' }}>
               {cart.map(({ item, quantity }) => (
                 <div key={item.id} className="card" style={{ marginBottom: 'var(--spacing-md)', display: 'flex', gap: 'var(--spacing-md)' }}>
-                  {item.image && (
+                  {item.image_url && (
                     <img
-                      src={item.image}
+                      src={item.image_url}
                       alt={item.name}
                       style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: 'var(--radius-md)' }}
                     />
@@ -184,6 +194,24 @@ export default function EmployeeCart() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="card" style={{ marginBottom: 'var(--spacing-xl)' }}>
+              <label style={{ display: 'block', fontWeight: 700, fontSize: 'var(--font-sm)', marginBottom: 'var(--spacing-sm)' }}>
+                📝 Customization / Special Instructions
+              </label>
+              <textarea
+                className="input"
+                placeholder="e.g. Less spicy, no onions, extra sauce on the side..."
+                rows={3}
+                maxLength={300}
+                value={notes}
+                onChange={e => updateNotes(e.target.value)}
+                style={{ resize: 'vertical' }}
+              />
+              <p style={{ fontSize: 'var(--font-xs)', color: 'var(--color-on-surface-secondary)', marginTop: 'var(--spacing-xs)' }}>
+                Visible to the cook preparing your order.
+              </p>
             </div>
 
             <div style={{ position: 'sticky', bottom: '80px', backgroundColor: 'var(--color-surface)', padding: 'var(--spacing-md)', borderTop: '1px solid var(--color-border)' }}>

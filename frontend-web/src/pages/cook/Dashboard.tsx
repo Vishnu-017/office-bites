@@ -7,7 +7,7 @@ import './Dashboard.css';
 
 interface OrderItem {
   item_id: string;
-  item_name: string;
+  name: string;
   quantity: number;
 }
 
@@ -17,6 +17,7 @@ interface Order {
   employee_name: string;
   items: OrderItem[];
   status: string;
+  notes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -42,11 +43,11 @@ export default function CookDashboard() {
 
   const loadOrders = async () => {
     try {
-      const data = await apiCall<Order[]>('/api/orders?role=cook', user?.token || null);
+      const data = await apiCall<Order[]>('/api/orders?scope=active', user?.token || null);
       setOrders(data.filter(o => o.status !== 'completed' && o.status !== 'cancelled')
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -65,7 +66,7 @@ export default function CookDashboard() {
       websocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         
-        if (data.type === 'order_update' || data.type === 'new_order') {
+        if (data.type === 'order_update' || data.type === 'order_new' || data.type === 'order_history_cleared') {
           loadOrders(); // Reload orders on any update
         }
       };
@@ -96,8 +97,8 @@ export default function CookDashboard() {
       });
       
       await loadOrders();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setUpdatingOrder(null);
     }
@@ -189,10 +190,17 @@ export default function CookDashboard() {
                           {order.items.map((item, idx) => (
                             <div key={idx} className="order-item-row">
                               <span className="item-qty">×{item.quantity}</span>
-                              <span className="item-name">{item.item_name}</span>
+                              <span className="item-name">{item.name}</span>
                             </div>
                           ))}
                         </div>
+
+                        {order.notes && (
+                          <div className="order-notes">
+                            <strong>📝 Note:</strong>
+                            <span>{order.notes}</span>
+                          </div>
+                        )}
 
                         <button
                           className="btn btn-accept"
@@ -237,10 +245,17 @@ export default function CookDashboard() {
                           {order.items.map((item, idx) => (
                             <div key={idx} className="order-item-row">
                               <span className="item-qty">×{item.quantity}</span>
-                              <span className="item-name">{item.item_name}</span>
+                              <span className="item-name">{item.name}</span>
                             </div>
                           ))}
                         </div>
+
+                        {order.notes && (
+                          <div className="order-notes">
+                            <strong>📝 Note:</strong>
+                            <span>{order.notes}</span>
+                          </div>
+                        )}
 
                         <button
                           className="btn btn-ready"

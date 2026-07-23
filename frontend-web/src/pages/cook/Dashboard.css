@@ -186,6 +186,23 @@
   color: var(--color-on-surface);
 }
 
+.order-notes {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  background-color: #FFF8E1;
+  border: 1px dashed var(--color-warning);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  font-size: var(--font-sm);
+  color: var(--color-on-surface);
+}
+
+.order-notes strong {
+  white-space: nowrap;
+}
+
 .btn-accept,
 .btn-ready {
   width: 100%;

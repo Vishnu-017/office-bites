@@ -8,7 +8,8 @@ interface MenuItem {
   name: string;
   description: string;
   category: string;
-  image: string;
+  image_url: string;
+  available: boolean;
 }
 
 interface CartItem {
@@ -32,8 +33,8 @@ export default function EmployeeMenu() {
     try {
       const data = await apiCall<MenuItem[]>('/api/menu', user?.token || null);
       setMenuItems(data);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -130,10 +131,10 @@ export default function EmployeeMenu() {
             const inCart = cart.find(c => c.item.id === item.id);
             
             return (
-              <div key={item.id} className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-                {item.image && (
-                  <img 
-                    src={item.image} 
+              <div key={item.id} className="card" style={{ display: 'flex', flexDirection: 'column', opacity: item.available ? 1 : 0.6 }}>
+                {item.image_url && (
+                  <img
+                    src={item.image_url}
                     alt={item.name}
                     style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: 'var(--radius-md)', marginBottom: 'var(--spacing-md)' }}
                   />
@@ -144,20 +145,36 @@ export default function EmployeeMenu() {
                 <p style={{ color: 'var(--color-on-surface-secondary)', fontSize: 'var(--font-sm)', marginBottom: 'var(--spacing-sm)', flex: 1 }}>
                   {item.description}
                 </p>
-                <span style={{ 
-                  display: 'inline-block',
-                  padding: '4px 12px',
-                  backgroundColor: 'var(--color-brand-light)',
-                  color: 'var(--color-brand)',
-                  borderRadius: 'var(--radius-full)',
-                  fontSize: 'var(--font-xs)',
-                  fontWeight: '600',
-                  marginBottom: 'var(--spacing-md)'
-                }}>
-                  {item.category}
-                </span>
+                <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+                  <span style={{
+                    display: 'inline-block',
+                    padding: '4px 12px',
+                    backgroundColor: 'var(--color-brand-light)',
+                    color: 'var(--color-brand)',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: 'var(--font-xs)',
+                    fontWeight: '600',
+                  }}>
+                    {item.category}
+                  </span>
+                  {!item.available && (
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '4px 12px',
+                      backgroundColor: 'var(--color-surface-tertiary)',
+                      color: 'var(--color-on-surface-secondary)',
+                      borderRadius: 'var(--radius-full)',
+                      fontSize: 'var(--font-xs)',
+                      fontWeight: '600',
+                    }}>
+                      Unavailable today
+                    </span>
+                  )}
+                </div>
 
-                {inCart ? (
+                {!item.available ? (
+                  <button className="btn btn-secondary" disabled style={{ width: '100%' }}>Unavailable</button>
+                ) : inCart ? (
                   <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
                     <button
                       className="btn btn-secondary"

@@ -1,6 +1,6 @@
 const API = import.meta.env.VITE_API_URL || '';
 
-export async function apiCall<T = any>(
+export async function apiCall<T = unknown>(
   path: string,
   token: string | null,
   options: RequestInit = {}
@@ -26,7 +26,7 @@ export async function apiCall<T = any>(
     return res.json();
   }
   
-  return res.text() as any;
+  return res.text() as unknown as T;
 }
 
 export function wsUrl(token: string) {
