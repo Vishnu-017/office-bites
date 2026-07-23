@@ -949,13 +949,19 @@ async def count_poll_options(poll_id: str, options: List[str]) -> Dict[str, int]
     return {opt: await db.poll_votes.count_documents({"poll_id": poll_id, "response": opt}) for opt in options}
 
 
+LUNCH_POLL_OPEN_HOUR = 6
+LUNCH_POLL_CLOSE_HOUR = 11
+
+
 async def ensure_daily_lunch_poll():
     """Auto-generates today's Lunch poll (Mon-Fri, IST) if one doesn't already exist.
     Mon/Wed get a Veg/Non-Veg/No-lunch choice; Tue/Thu/Fri get a simple Yes/No-lunch choice.
-    Weekends get no lunch poll."""
+    Weekends get no lunch poll. Poll opens at 6 AM IST and closes at 11 AM IST."""
     ist_now = now_ist()
     weekday = ist_now.weekday()
     if weekday > 4:  # Saturday, Sunday
+        return
+    if ist_now.hour < LUNCH_POLL_OPEN_HOUR:  # not open yet today
         return
     today = today_ist_str()
     existing = await db.polls.find_one({"kind": "lunch", "date": today}, {"_id": 0})
@@ -969,7 +975,7 @@ async def ensure_daily_lunch_poll():
         options = list(LUNCH_OPTIONS_DEFAULT)
         description = "Will you have lunch today?"
 
-    closes_at = datetime.combine(ist_now.date(), dt_time(10, 30), tzinfo=IST).astimezone(timezone.utc).isoformat()
+    closes_at = datetime.combine(ist_now.date(), dt_time(LUNCH_POLL_CLOSE_HOUR, 0), tzinfo=IST).astimezone(timezone.utc).isoformat()
     poll = {
         "id": str(uuid.uuid4()),
         "kind": "lunch",

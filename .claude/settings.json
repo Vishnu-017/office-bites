@@ -21,7 +21,8 @@
       "Bash(curl -s -o /tmp/eggsandwich_toi.jpg \"https://static.toiimg.com/thumb/msid-91741738,width-1070,height-580,resizemode-75/91741738,pt-32,y_pad-40/91741738.jpg\")",
       "Bash(python3 /tmp/update_egg_sandwich.py)",
       "Bash(curl -s -o /tmp/eggsandwich_yt.jpg -w \"%{http_code} %{content_type}\\\\n\" \"https://i.ytimg.com/vi/Stg197cqlA0/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLAUsRC3-noElAwx9bVeFe8UV5OjCQ\")",
-      "Bash(python3 /tmp/update_egg_sandwich2.py)"
+      "Bash(python3 /tmp/update_egg_sandwich2.py)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('server.py'\\).read\\(\\)\\)\")"
     ],
     "additionalDirectories": [
       "/tmp",

@@ -21,7 +21,7 @@ interface Vote { employee_id: string; employee_name: string; response: string; v
 interface ResponsesData { options: string[]; counts: Record<string, number>; responses: Record<string, Vote[]>; }
 
 const todayStr = todayISTDateString;
-const defaultCloseLocal = () => `${todayStr()}T10:30`;
+const defaultCloseLocal = () => `${todayStr()}T11:00`;
 
 // Interpret a "YYYY-MM-DDTHH:mm" string as IST wall-clock time and produce a UTC ISO string.
 function istLocalToIso(localValue: string): string {
